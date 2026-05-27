@@ -1,0 +1,2770 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>轉檔作業工作台</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Noto Sans TC', -apple-system, sans-serif;
+  background: #f4f5f7;
+  color: #1a1d23;
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ── Shell Layout ── */
+.shell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  grid-template-rows: 56px 1fr;
+  min-height: 100vh;
+}
+
+/* ── Top Bar ── */
+.topbar {
+  grid-column: 1 / -1;
+  background: #ffffff;
+  border-bottom: 1px solid #dde1e8;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.topbar-icon {
+  width: 30px; height: 30px;
+  background: linear-gradient(135deg, #4f8ef7, #7b5cf6);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.topbar-title {
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #1a1d23;
+  letter-spacing: -0.02em;
+}
+.topbar-sep {
+  width: 1px;
+  height: 20px;
+  background: #dde1e8;
+  margin: 0 4px;
+}
+.topbar-period {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.topbar-period label {
+  font-size: 0.72rem;
+  color: #6b7280;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.topbar-period input {
+  background: #eef0f4;
+  border: 1px solid #dde1e8;
+  color: #1a1d23;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  width: 88px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.topbar-period input:focus { border-color: #4f8ef7; }
+.period-badge {
+  background: #1a2744;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  background: #ffffff;
+  border-right: 1px solid #dde1e8;
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.sidebar-section {
+  padding: 12px 16px 4px;
+  font-size: 0.6rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #9ca3af;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 0.15s;
+  position: relative;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  color: #6b7280;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  margin: 0 8px;
+  width: calc(100% - 16px);
+  border-radius: 8px;
+}
+.nav-item:hover { background: #eef0f4; color: #c5cad6; }
+.nav-item.active { background: #e8f0fe; color: #1d4ed8; font-weight: 700; }
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 25%; bottom: 25%;
+  width: 3px;
+  background: #4f8ef7;
+  border-radius: 0 2px 2px 0;
+}
+.nav-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.nav-dot.green { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.5); }
+.nav-dot.blue  { background: #4f8ef7; box-shadow: 0 0 6px rgba(79,142,247,0.5); }
+.nav-dot.purple{ background: #7b5cf6; box-shadow: 0 0 6px rgba(123,92,246,0.5); }
+.nav-dot.gray  { background: #374151; }
+.nav-badge {
+  margin-left: auto;
+  font-size: 0.6rem;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-weight: 700;
+}
+
+/* ── Main content ── */
+.main {
+  overflow-y: auto;
+  background: #f4f5f7;
+}
+.panel {
+  display: none;
+  padding: 28px 32px;
+  max-width: 1200px;
+}
+.panel.active { display: block; }
+
+/* ── Panel header ── */
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.panel-icon {
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.panel-icon.green  { background: linear-gradient(135deg, #16a34a, #22c55e); }
+.panel-icon.blue   { background: linear-gradient(135deg, #1d4ed8, #4f8ef7); }
+.panel-icon.purple { background: linear-gradient(135deg, #6d28d9, #7b5cf6); }
+.panel-icon.teal   { background: linear-gradient(135deg, #0d9488, #14b8a6); }
+.panel-h1 { font-size: 1.25rem; font-weight: 900; color: #1a1d23; letter-spacing: -0.02em; }
+.panel-sub { font-size: 0.75rem; color: #6b7280; margin-top: 2px; }
+
+/* ── Divider ── */
+.divider {
+  height: 1px;
+  background: #eef0f4;
+  margin: 0 0 24px;
+}
+
+/* ── Card ── */
+.card {
+  background: #ffffff;
+  border: 1px solid #dde1e8;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.card-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.step-num {
+  width: 20px; height: 20px;
+  background: #e8f0fe;
+  color: #1d4ed8;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+/* ── Settings grid ── */
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  background: #f4f5f7;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid #dde1e8;
+}
+@media (max-width: 520px) { .settings-grid { grid-template-columns: 1fr; } }
+.settings-grid label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  display: block;
+  margin-bottom: 4px;
+}
+.settings-grid input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #dde1e8;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: 'JetBrains Mono', monospace;
+  background: #ffffff;
+  color: #1a1d23;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.settings-grid input:focus { border-color: #4f8ef7; }
+
+/* ── Drop zone ── */
+.drop-zone {
+  border: 2px dashed #dde1e8;
+  border-radius: 10px;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s;
+  background: #f4f5f7;
+}
+.drop-zone:hover, .drop-zone.active {
+  border-color: #4f8ef7;
+  background: #0e1620;
+}
+.drop-zone .icon { width: 36px; height: 36px; margin: 0 auto 10px; opacity: 0.25; }
+.drop-zone .main-text { font-weight: 700; font-size: 0.9rem; color: #6b7280; }
+.drop-zone .sub-text { font-size: 0.72rem; color: #9ca3af; margin-top: 4px; }
+
+/* ── Status ── */
+.status {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  display: none;
+}
+.status.ok   { display:block; background: #f0fdf4; color: #4ade80; border: 1px solid #14532d; }
+.status.err  { display:block; background: #fef2f2; color: #f87171; border: 1px solid #7f1d1d; }
+.status.warn { display:block; background: #fffbeb; color: #fbbf24; border: 1px solid #713f12; }
+
+/* ── Stats row ── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+@media (max-width: 520px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+.stat-box {
+  background: #f4f5f7;
+  border: 1px solid #dde1e8;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+.stat-box .val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #2563eb;
+}
+.stat-box .lbl { font-size: 0.65rem; color: #6b7280; margin-top: 2px; }
+
+/* ── Table ── */
+.table-wrap { overflow-x: auto; border: 1px solid #dde1e8; border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+thead { background: #ffffff; border-bottom: 1px solid #dde1e8; }
+th {
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.65rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+th.center, td.center { text-align: center; }
+td {
+  padding: 8px 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  border-top: 1px solid #eef0f4;
+  color: #6b7280;
+}
+tr:hover td { background: #f8f9fb; }
+td.area { font-weight: 700; color: #1a1d23; }
+td.sort-highlight { font-weight: 700; color: #4f8ef7; }
+.tag {
+  display: inline-block;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.tag-old { background: #eef0f4; color: #6b7280; }
+.tag-new { background: #f0fdf4; color: #4ade80; }
+.more-row td {
+  text-align: center; color: #9ca3af; font-family: 'Noto Sans TC', sans-serif;
+  font-style: italic; font-size: 0.75rem; background: #f4f5f7; padding: 12px;
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; gap: 10px; flex-wrap: wrap;
+}
+.filter-input {
+  padding: 7px 12px;
+  border: 1px solid #dde1e8;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  width: 200px;
+  outline: none;
+  font-family: 'JetBrains Mono', monospace;
+  background: #f4f5f7;
+  color: #1a1d23;
+}
+.filter-input:focus { border-color: #4f8ef7; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Noto Sans TC', sans-serif;
+}
+.btn svg { width: 15px; height: 15px; }
+.btn-primary { background: #1d4ed8; color: #fff; }
+.btn-primary:hover { background: #2563eb; transform: translateY(-1px); }
+.btn-green { background: #16a34a; color: #fff; }
+.btn-green:hover { background: #15803d; transform: translateY(-1px); }
+.btn-teal { background: #0d9488; color: #fff; }
+.btn-teal:hover { background: #0f766e; }
+.btn-purple { background: #6d28d9; color: #fff; }
+.btn-purple:hover { background: #7c3aed; }
+.btn-ghost {
+  background: #eef0f4; color: #6b7280; border: 1px solid #dde1e8;
+  padding: 7px 14px; font-size: 0.78rem;
+}
+.btn-ghost:hover { background: #262e44; color: #1a1d23; }
+.btn-danger { background: #7f1d1d; color: #fca5a5; }
+.btn-danger:hover { background: #991b1b; }
+.btn-sm { padding: 4px 10px; font-size: 0.72rem; }
+.btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+/* ── Warn list ── */
+.warn-list {
+  margin-top: 10px; padding: 10px 14px;
+  background: #fffbeb; border: 1px solid #713f12; border-radius: 8px;
+  font-size: 0.78rem; color: #fbbf24;
+}
+.warn-list summary { cursor: pointer; font-weight: 700; }
+.warn-list ul { margin: 6px 0 0 18px; }
+.warn-list li { margin-bottom: 2px; }
+.hidden { display: none !important; }
+
+/* ── Transfer banner ── */
+.transfer-banner {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.transfer-banner-info { display: flex; align-items: center; gap: 12px; }
+.transfer-arrow {
+  width: 32px; height: 32px;
+  background: #dbeafe;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.transfer-text .t1 { font-size: 0.82rem; font-weight: 700; color: #1d4ed8; }
+.transfer-text .t2 { font-size: 0.72rem; color: #6b7280; margin-top: 1px; }
+
+/* ── Dashboard (home) ── */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: auto;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+@media (max-width: 700px) { .dash-grid { grid-template-columns: 1fr; } }
+.dash-card {
+  background: #ffffff;
+  border: 1px solid #dde1e8;
+  border-radius: 14px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.dash-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 14px 14px 0 0;
+}
+.dash-card.green::before { background: linear-gradient(90deg, #16a34a, #4ade80); }
+.dash-card.blue::before  { background: linear-gradient(90deg, #1d4ed8, #7eb3ff); }
+.dash-card.purple::before{ background: linear-gradient(90deg, #6d28d9, #a78bfa); }
+.dash-card:hover { border-color: #3a4155; background: #f0f2f6; transform: translateY(-2px); }
+.dash-card-icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 12px;
+}
+.dash-card.green .dash-card-icon { background: rgba(22,163,74,0.2); }
+.dash-card.blue  .dash-card-icon { background: rgba(29,78,216,0.2); }
+.dash-card.purple .dash-card-icon { background: rgba(109,40,217,0.2); }
+.dash-card-num { font-size: 0.65rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+.dash-card.green .dash-card-num { color: #4ade80; }
+.dash-card.blue  .dash-card-num { color: #1d4ed8; }
+.dash-card.purple .dash-card-num { color: #a78bfa; }
+.dash-card-title { font-size: 1rem; font-weight: 900; color: #1a1d23; margin-bottom: 4px; }
+.dash-card-desc { font-size: 0.75rem; color: #6b7280; line-height: 1.5; }
+.dash-card-arrow { position: absolute; bottom: 16px; right: 16px; color: #d1d5db; font-size: 1.2rem; }
+.dash-flow {
+  background: #ffffff;
+  border: 1px solid #dde1e8;
+  border-radius: 12px;
+  padding: 20px;
+}
+.dash-flow-title { font-size: 0.72rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 16px; }
+.flow-steps {
+  display: flex; align-items: center; gap: 0; flex-wrap: wrap;
+}
+.flow-step {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  background: #f4f5f7;
+  border: 1px solid #dde1e8;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+.flow-step-num {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.6rem; font-weight: 900;
+  flex-shrink: 0;
+}
+.flow-step.s1 .flow-step-num { background: rgba(22,163,74,0.3); color: #4ade80; }
+.flow-step.s2 .flow-step-num { background: rgba(79,142,247,0.3); color: #1d4ed8; }
+.flow-step.s3 .flow-step-num { background: rgba(123,92,246,0.3); color: #a78bfa; }
+.flow-step-label { color: #6b7280; font-weight: 500; }
+.flow-arrow { color: #d1d5db; font-size: 1.2rem; padding: 0 6px; }
+.flow-step.linked { border-color: #bfdbfe; background: #eff6ff; }
+.flow-step.linked .flow-step-label { color: #1d4ed8; }
+
+/* ── 配銷系統 (React mount) ── */
+#distrib-root *, #distrib-root *::before, #distrib-root *::after { box-sizing: border-box; }
+#distrib-root input[type="file"] { font-size: 10px; color: #6b7280; cursor: pointer; margin-top: 8px; }
+#distrib-root input[type="file"]::file-selector-button {
+  margin-right: 8px; padding: 5px 10px; border-radius: 6px; border: 0;
+  font-size: 10px; font-weight: 700; background: #eff6ff; color: #1d4ed8; cursor: pointer;
+}
+.distrib-modal-backdrop {
+  position: fixed; top:0;left:0;right:0;bottom:0; z-index:9999;
+  display:flex; align-items:center; justify-content:center; padding:16px;
+  background: rgba(0,0,0,0.5);
+}
+.distrib-modal-card {
+  background: #ffffff; border-radius: 16px; border: 1px solid #dde1e8;
+  box-shadow: 0 25px 50px rgba(0,0,0,0.5); width: 100%; overflow-y:auto;
+}
+.distrib-select {
+  padding: 6px 8px; border-radius: 8px; border: 1px solid #dde1e8;
+  font-size: 12px; background: #f4f5f7; color: #1a1d23; outline: none; width: 100%;
+}
+.distrib-select:focus { box-shadow: 0 0 0 2px #4f8ef7; }
+.distrib-input {
+  padding: 6px 8px; border: 1px solid #dde1e8; border-radius: 8px;
+  font-size: 12px; outline: none; background: #f4f5f7; color: #1a1d23;
+}
+.distrib-input:focus { box-shadow: 0 0 0 2px #4f8ef7; border-color: transparent; }
+
+/* ── 併箱工具 styles ── */
+.box-section {
+  background: #ffffff; border: 1px solid #dde1e8; border-radius: 12px;
+  padding: 20px; margin-bottom: 16px;
+}
+.box-section h2 {
+  margin: 0 0 14px 0; font-size: 0.95rem; color: #1a1d23;
+  display: flex; align-items: center; gap: 8px; font-weight: 700;
+}
+.box-mode-tabs { display:flex; gap:0; margin-bottom:20px; border-bottom: 2px solid #dde1e8; }
+.box-mode-tab {
+  padding: 10px 20px; cursor:pointer; font-size:0.85rem; font-weight:600;
+  color: #6b7280; border-bottom:3px solid transparent; margin-bottom:-2px;
+  transition: all 0.2s; background:none; border-top:none; border-left:none; border-right:none;
+  font-family: 'Noto Sans TC', sans-serif;
+}
+.box-mode-tab:hover { color: #1d4ed8; }
+.box-mode-tab.active { color: #1d4ed8; border-bottom-color: #4f8ef7; }
+.box-mode-badge {
+  display:inline-block; padding:2px 7px; border-radius:10px;
+  font-size:0.65rem; margin-left:7px; background:#eef0f4; color:#6b7280;
+}
+.box-mode-tab.active .box-mode-badge { background:#dbeafe; color:#1d4ed8; }
+.box-info-bar {
+  background: #eff6ff; border-left: 3px solid #3b82f6; padding: 10px 14px;
+  margin: 12px 0; font-size: 0.8rem; color: #6b7280; border-radius: 0 6px 6px 0;
+}
+.box-error-bar {
+  background: #fef2f2; border-left: 3px solid #ef4444; padding: 10px 14px;
+  margin: 12px 0; font-size: 0.8rem; color: #fca5a5; border-radius: 0 6px 6px 0;
+}
+.box-mode-intro {
+  background: #eff6ff; border-left: 3px solid #3b82f6; padding: 10px 14px;
+  margin-bottom: 14px; border-radius: 0 6px 6px 0; font-size: 0.78rem;
+  color: #6b7280; line-height: 1.6;
+}
+.box-table-wrapper { max-height: 400px; overflow: auto; border: 1px solid #dde1e8; border-radius: 6px; margin-top: 10px; }
+.box-table { width:100%; border-collapse:collapse; background:#f4f5f7; font-size:0.8rem; }
+.box-table th, .box-table td { border:1px solid #dde1e8; padding:7px 10px; text-align:left; color: #6b7280; }
+.box-table th { background:#f8f9fb; font-weight:700; color:#6b7280; font-size:0.72rem; position:sticky; top:0; }
+.box-table tr:nth-child(even) td { background:#f8f9fb; }
+.editable-table input {
+  width:100%; border:none; background:transparent; padding:2px 4px;
+  font-size:0.8rem; font-family:'Noto Sans TC',sans-serif; color: #1a1d23;
+}
+.editable-table input:focus { background:#eff6ff; outline:1px solid #3b82f6; }
+.box-stats { display:flex; gap:12px; flex-wrap:wrap; margin:12px 0; }
+.box-stat-card { background:#f4f5f7; border:1px solid #dde1e8; border-radius:8px; padding:10px 16px; min-width:110px; }
+.box-stat-label { font-size:0.65rem; color:#6b7280; }
+.box-stat-value { font-size:1.3rem; font-weight:bold; color:#2563eb; }
+.terminator { color: #f87171; font-weight:bold; }
+.help-details { background:#f4f5f7; border:1px solid #dde1e8; border-radius:6px; padding:12px; margin-top:10px; }
+.help-details summary { cursor:pointer; font-weight:700; color:#1d4ed8; font-size:0.82rem; }
+.action-col { width:60px; text-align:center; }
+.file-label {
+  display:inline-flex; align-items:center; gap:6px;
+  background:#1d4ed8; color:#fff; padding:9px 16px; border-radius:8px;
+  cursor:pointer; font-size:0.82rem; font-weight:700; transition:background 0.2s;
+  font-family:'Noto Sans TC',sans-serif;
+}
+.file-label:hover { background:#2563eb; }
+
+/* ── 條碼工具共用樣式 ── */
+.bc-panel { font-family: 'Noto Sans TC', sans-serif; color: #1a1d23; }
+.bc-period-row { display:flex; flex-wrap:wrap; align-items:center; gap:14px;
+  background:#fffbeb; border:2px solid #d4b86a; border-radius:8px; padding:12px 16px; }
+.bc-period-row label { font-size:13px; font-weight:700; color:#7a5a1a; }
+.bc-period-row input[type=number] { width:72px; font-family:'JetBrains Mono',monospace;
+  font-size:18px; font-weight:700; padding:4px 8px; border:2px solid #d4b86a;
+  border-radius:4px; text-align:center; background:#fff; }
+.bc-period-row select { font-size:14px; font-weight:600; padding:5px 8px;
+  border:2px solid #d4b86a; border-radius:4px; background:#fff; cursor:pointer; }
+.bc-period-row input:focus, .bc-period-row select:focus { outline:none; border-color:#c0392b; }
+.bc-period-preview { margin-left:auto; font-size:12px; color:#7a5a1a; }
+.bc-period-preview b { font-family:'JetBrains Mono',monospace; font-size:15px; color:#c0392b;
+  background:#fff; padding:2px 8px; border-radius:3px; border:1.5px solid #d4b86a; }
+.bc-dz { border:2px dashed #dde1e8; border-radius:8px; padding:20px; text-align:center;
+  cursor:pointer; transition:all .2s; background:#f8f9fb; }
+.bc-dz:hover, .bc-dz.over { border-color:#1a3a5c; background:#edf2f8; }
+.bc-dz .ico { font-size:28px; margin-bottom:6px; }
+.bc-dz p { font-size:12px; color:#6b7280; }
+.bc-dz strong { color:#1a1d23; }
+.bc-fc { margin-top:8px; font-family:'JetBrains Mono',monospace; font-size:12px;
+  color:#16a34a; font-weight:600; }
+.bc-fc.warn { color:#c0392b; }
+.bc-global-ver { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  background:#eef4fa; border:2px solid #a0b4c8; border-radius:8px; padding:12px 16px; margin-bottom:14px; }
+.bc-global-ver label { font-size:14px; font-weight:700; color:#1a3a5c; }
+.bc-global-ver input { width:64px; font-family:'JetBrains Mono',monospace; font-size:22px;
+  font-weight:700; padding:4px 8px; border:2px solid #a0b4c8; border-radius:4px; text-align:center; background:#fff; }
+.bc-global-ver input:focus { outline:none; border-color:#1a3a5c; }
+.bc-global-ver .hint { font-size:11px; color:#6b7280; }
+.bc-btn-apply { padding:6px 14px; background:#1a3a5c; color:#fff; border:none;
+  border-radius:4px; font-family:'Noto Sans TC',sans-serif; font-size:12px; font-weight:700; cursor:pointer; }
+.bc-btn-apply:hover { background:#c0392b; }
+.bc-btn-clear { padding:6px 12px; background:#fff; color:#c0392b; border:1.5px solid #c0392b;
+  border-radius:4px; font-family:'Noto Sans TC',sans-serif; font-size:11px; font-weight:700; cursor:pointer; }
+.bc-btn-clear:hover { background:#c0392b; color:#fff; }
+.bc-ovr-note { font-size:11px; color:#6b7280; margin-bottom:8px; }
+.bc-sec-label { font-size:11px; font-weight:700; color:#1a3a5c; margin:14px 0 5px; }
+.bc-sec-label:first-of-type { margin-top:0; }
+.bc-ver-table { width:100%; border-collapse:collapse; font-size:11px; margin-bottom:4px; }
+.bc-ver-table th { background:#2c3e50; color:#fff; padding:6px; text-align:center;
+  border:1px solid #1a2b3c; font-size:11px; }
+.bc-ver-table td { border:1px solid #dde1e8; padding:3px 4px; text-align:center; vertical-align:middle; }
+.bc-ver-table .cs { font-weight:700; background:#f8f9fb; text-align:left;
+  padding-left:8px; white-space:nowrap; }
+.bc-ver-table .ce { background:linear-gradient(to top right,transparent calc(50% - 0.6px),
+  #bbb calc(50% - 0.6px),#bbb calc(50% + 0.6px),transparent calc(50% + 0.6px));
+  min-width:32px; min-height:20px; }
+.bc-cell-wrap { display:flex; flex-direction:column; gap:2px; align-items:center; }
+.bc-field-label { font-size:8px; color:#9ca3af; display:block; margin-bottom:1px; }
+.bc-ver-table input[type=text] { width:42px; font-family:'JetBrains Mono',monospace;
+  font-size:11px; font-weight:700; padding:2px 3px; border:1.5px solid #dde1e8;
+  border-radius:2px; text-align:center; display:block; margin:0 auto; }
+.bc-ver-table input.ver { background:#e8f0f8; border-color:#a0b4c8; }
+.bc-ver-table input.prc { background:#fef3c7; border-color:#d4b86a; }
+.bc-ver-table input[type=text]:focus { outline:none; border-color:#1a3a5c; }
+.bc-hl-toggle { display:inline-flex; align-items:center; gap:3px; font-size:9px;
+  color:#c0392b; cursor:pointer; user-select:none; font-weight:700; padding:1px 4px;
+  border-radius:2px; border:1px solid #f0d0cc; background:#fff8f7; line-height:1.3; }
+.bc-hl-toggle:hover { background:#ffe8e6; }
+.bc-hl-toggle input[type=checkbox] { width:11px; height:11px; margin:0; accent-color:#c0392b; cursor:pointer; }
+.bc-hl-toggle.on { background:#c0392b; color:#fff; border-color:#c0392b; }
+.bc-prc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:8px; margin-top:8px; }
+.bc-prc-item { display:flex; align-items:center; gap:8px; background:#f8f9fb;
+  border:1px solid #dde1e8; border-radius:6px; padding:7px 10px; }
+.bc-prc-item label { font-size:11px; color:#374151; flex:1; line-height:1.4; }
+.bc-prc-item input { width:52px; font-family:'JetBrains Mono',monospace; font-size:13px;
+  font-weight:700; padding:3px 5px; border:1.5px solid #d4b86a; border-radius:2px;
+  text-align:center; background:#fef3c7; }
+.bc-prc-item input:focus { outline:none; border-color:#1a3a5c; }
+.bc-btn-gen { display:block; width:100%; margin-top:14px; padding:12px; background:#2c3e50;
+  color:#fff; border:none; font-family:'Noto Sans TC',sans-serif; font-size:14px;
+  font-weight:700; letter-spacing:.08em; cursor:pointer; border-radius:6px; transition:background .2s; }
+.bc-btn-gen:hover { background:#c0392b; }
+/* 條碼預覽 - 整合版直接 inline 顯示，不切換 div */
+.bc-preview-wrap { margin-top:16px; }
+.bc-miss-box { border:1.5px solid #c0392b; border-radius:4px; padding:10px 14px;
+  font-size:11px; background:#fff8f8; margin-bottom:12px; }
+.bc-miss-box h3 { color:#c0392b; margin-bottom:6px; font-size:11px; }
+.bc-miss-box ul { padding-left:14px; columns:4; }
+.bc-miss-box li { font-family:'JetBrains Mono',monospace; font-size:9.5px; margin-bottom:2px; }
+.bc-ok-box { border-color:#16a34a; background:#f0fdf4; }
+.bc-ok-box h3 { color:#16a34a; }
+/* 條碼表格 */
+.bc-doc-page { background:#fff; border:1px solid #dde1e8; border-radius:6px;
+  margin-bottom:20px; padding:12px 14px; box-shadow:0 2px 8px rgba(0,0,0,.05); }
+.bc-doc-page.portrait { max-width:580px; }
+.bc-doc-title { text-align:center; font-size:13px; font-weight:700; margin-bottom:8px; letter-spacing:.04em; }
+.bct { width:100%; border-collapse:collapse; table-layout:fixed; }
+.bct th { border:1px solid #333; background:#e2e8f0; font-weight:700; padding:4px 2px;
+  text-align:center; font-size:10px; line-height:1.3; color:#1a1d23; }
+.bct td { border:1px solid #555; text-align:center; vertical-align:middle; padding:2px; }
+.bct .rl { font-weight:600; background:#f8f9fb; font-size:9px; line-height:1.5; width:80px; }
+.bct .rl b { display:block; font-size:9.5px; }
+.bct .rl small { font-size:8px; color:#6b7280; }
+.bct-h { height:88px; }
+.bct-inner { display:flex; flex-direction:column; align-items:center;
+  justify-content:center; height:100%; padding:1px; }
+.bct-price { font-size:8.5px; font-weight:600; color:#1a1d23; margin-bottom:1px; white-space:nowrap; }
+.bct-img { max-width:128px; max-height:58px; object-fit:contain; display:block; margin:0 auto; }
+.bct-fn { font-family:'JetBrains Mono',monospace; font-size:7px; color:#9ca3af; display:block; margin-top:1px; }
+.bct-miss { color:#c0392b; font-size:8px; font-family:'JetBrains Mono',monospace; line-height:1.4; }
+.bct-empty { background:linear-gradient(to top right,transparent calc(50% - 0.6px),
+  #9ca3af calc(50% - 0.6px),#9ca3af calc(50% + 0.6px),transparent calc(50% + 0.6px)); }
+.bct-slash { background:linear-gradient(to bottom right,transparent calc(50% - 0.5px),
+  #9ca3af calc(50% - 0.5px),#9ca3af calc(50% + 0.5px),transparent calc(50% + 0.5px));
+  background-color:#f8f9fb; }
+.bct-h.hl .bct-price { color:#c0392b !important; font-weight:700; }
+.bct-h.hl .bct-fn { color:#c0392b !important; font-weight:700; }
+.bc-note-col { width:110px; font-size:8.5px; color:#374151; text-align:left;
+  padding:3px 5px !important; vertical-align:top; background:#fffef0; border-left:2px solid #d4b86a !important; }
+.bc-note-col-head { background:#d4b86a !important; color:#5a3a00; font-weight:700; font-size:9px; }
+@page {
+  size: A4 landscape;
+  margin: 12mm 10mm;
+}
+@media print {
+  /* 隱藏瀏覽器列印頁首頁尾 */
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* 只留條碼預覽，其餘全部隱藏 */
+  body > * { display: none !important; }
+  body > .shell { display: block !important; }
+  .shell > .topbar  { display: none !important; }
+  .shell > .sidebar { display: none !important; }
+  .shell > .main    { display: block !important; overflow: visible; }
+
+  /* 隱藏所有 panel，再只顯示有 active 的那個 */
+  .panel { display: none !important; }
+  .panel.active { display: block !important; padding: 0; }
+
+  /* panel 內只保留 bc-preview-wrap，其餘全隱藏 */
+  .panel.active > *:not(.bc-preview-wrap) { display: none !important; }
+  .bc-preview-wrap { display: block !important; }
+
+  /* 條碼缺圖警告列印時也隱藏 */
+  .bc-miss-box, .bc-ok-box { display: none !important; }
+
+  /* 每頁條碼表格獨立一頁，去掉 UI 裝飾 */
+  .bc-doc-page {
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 4mm 0 !important;
+    break-after: page;
+    page-break-after: always;
+  }
+  .bc-doc-page:last-child {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* 反紅與斜線格的顏色保留 */
+  .bct-h.hl .bct-price { color: #c0392b !important; }
+  .bct-h.hl .bct-fn    { color: #c0392b !important; }
+  .bct-empty  { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bct-slash  { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bc-note-col{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="topbar-logo">
+      <div class="topbar-icon">
+        <svg width="16" height="16" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M4 6h16M4 10h16M4 14h8M4 18h8M14 14l2 2 4-4"/>
+        </svg>
+      </div>
+      <span class="topbar-title">轉檔作業工作台</span>
+    </div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-period">
+      <label>當期期別</label>
+      <input type="text" id="globalPeriod" value="115-1" oninput="syncPeriod(this.value)">
+      <span class="period-badge" id="periodDisplay">115-1</span>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-section">總覽</div>
+    <button class="nav-item active" onclick="switchTab('home')" id="nav-home">
+      <div class="nav-dot gray"></div>
+      作業總覽
+    </button>
+
+    <div class="sidebar-section">出貨流程</div>
+    <button class="nav-item" onclick="switchTab('distrib')" id="nav-distrib">
+      <div class="nav-dot green"></div>
+      配銷建議系統
+      <span class="nav-badge" id="nav-distrib-badge" style="display:none">✓</span>
+    </button>
+    <button class="nav-item" onclick="switchTab('sap')" id="nav-sap">
+      <div class="nav-dot blue"></div>
+      SAP 格式轉換
+      <span class="nav-badge transfer-ready" id="nav-sap-badge" style="display:none">轉入</span>
+    </button>
+    <button class="nav-item" onclick="switchTab('box')" id="nav-box">
+      <div class="nav-dot purple"></div>
+      併箱組合產生
+    </button>
+
+    <div class="sidebar-section">條碼表工具</div>
+    <button class="nav-item" onclick="switchTab('refbc')" id="nav-refbc">
+      <div class="nav-dot" style="background:#f59e0b;box-shadow:0 0 6px rgba(245,158,11,0.4)"></div>
+      參考書條碼表
+    </button>
+    <button class="nav-item" onclick="switchTab('verbc')" id="nav-verbc">
+      <div class="nav-dot" style="background:#ec4899;box-shadow:0 0 6px rgba(236,72,153,0.4)"></div>
+      版版補充教材條碼
+    </button>
+  </nav>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- ══ HOME ══ -->
+    <div class="panel active" id="panel-home">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <div class="panel-icon blue">
+            <svg width="20" height="20" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+          </div>
+          <div>
+            <div class="panel-h1">作業總覽</div>
+            <div class="panel-sub">集中管理本期所有出貨作業工具</div>
+          </div>
+        </div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="dash-grid">
+        <div class="dash-card green" onclick="switchTab('distrib')">
+          <div class="dash-card-icon">
+            <svg width="18" height="18" fill="none" stroke="#4ade80" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M9 17v-2m3 2v-4m3 4v-6M5 21h14a2 2 0 002-2V7l-5-5H5a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <div class="dash-card-num">工具 1</div>
+          <div class="dash-card-title">配銷建議系統</div>
+          <div class="dash-card-desc">上傳庫存、銷量、修訂對照表，自動計算各縣市應配發書目與版次。</div>
+          <div class="dash-card-arrow">→</div>
+        </div>
+        <div class="dash-card blue" onclick="switchTab('sap')">
+          <div class="dash-card-icon">
+            <svg width="18" height="18" fill="none" stroke="#7eb3ff" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+          </div>
+          <div class="dash-card-num">工具 2</div>
+          <div class="dash-card-title">SAP 格式轉換</div>
+          <div class="dash-card-desc">將配銷建議表轉換為 SAP 舊版配銷可匯入格式，自動補排序與備援版次。</div>
+          <div class="dash-card-arrow">→</div>
+        </div>
+        <div class="dash-card purple" onclick="switchTab('box')">
+          <div class="dash-card-icon">
+            <svg width="18" height="18" fill="none" stroke="#a78bfa" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+            </svg>
+          </div>
+          <div class="dash-card-num">工具 3</div>
+          <div class="dash-card-title">併箱組合產生</div>
+          <div class="dash-card-desc">依可用版次庫存，自動計算所有可能的版次組合，匯出完整格式 Excel。</div>
+          <div class="dash-card-arrow">→</div>
+        </div>
+        <div class="dash-card" style="background:#fff;border-color:#dde1e8;cursor:pointer;" onclick="switchTab('refbc')">
+          <div class="dash-card-icon" style="background:rgba(245,158,11,0.12)">
+            <svg width="18" height="18" fill="none" stroke="#f59e0b" stroke-width="2" viewBox="0 0 24 24">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+            </svg>
+          </div>
+          <div class="dash-card-num" style="color:#f59e0b">工具 4</div>
+          <div class="dash-card-title">參考書條碼表</div>
+          <div class="dash-card-desc">產生學習自修、學評、麻辣講義、測驗卷等參考書系列條碼表，支援儲存 PDF。</div>
+          <div class="dash-card-arrow">→</div>
+        </div>
+        <div class="dash-card" style="background:#fff;border-color:#dde1e8;cursor:pointer;" onclick="switchTab('verbc')">
+          <div class="dash-card-icon" style="background:rgba(236,72,153,0.12)">
+            <svg width="18" height="18" fill="none" stroke="#ec4899" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+          </div>
+          <div class="dash-card-num" style="color:#ec4899">工具 5</div>
+          <div class="dash-card-title">版版補充教材條碼</div>
+          <div class="dash-card-desc">產生習寫簿、練習簿、重點複習等版版補充教材條碼表，支援備註欄與儲存 PDF。</div>
+          <div class="dash-card-arrow">→</div>
+        </div>
+      </div>
+
+      <div class="dash-flow">
+        <div class="dash-flow-title">本期作業流程</div>
+        <div class="flow-steps">
+          <div class="flow-step s1 linked" style="cursor:pointer" onclick="switchTab('distrib')">
+            <div class="flow-step-num">1</div>
+            <div class="flow-step-label">配銷建議系統</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step s2 linked" style="cursor:pointer" onclick="switchTab('sap')">
+            <div class="flow-step-num">2</div>
+            <div class="flow-step-label">SAP 格式轉換</div>
+          </div>
+          <div class="flow-arrow">　｜</div>
+          <div class="flow-step s3" style="opacity:0.5">
+            <div class="flow-step-num">△</div>
+            <div class="flow-step-label">可直接串聯</div>
+          </div>
+          <div class="flow-arrow" style="margin:0 16px"></div>
+          <div class="flow-step s3 linked" style="cursor:pointer" onclick="switchTab('box')">
+            <div class="flow-step-num">3</div>
+            <div class="flow-step-label">併箱組合產生（獨立）</div>
+          </div>
+        </div>
+        <div style="margin-top:12px; font-size:0.72rem; color:#9ca3af;">
+          ✦ 工具 1 計算完成後，可直接點「轉入 SAP 工具」一鍵帶入配銷結果，省去手動下載再上傳。工具 3 為獨立流程。
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ DISTRIB (React) ══ -->
+    <div class="panel" id="panel-distrib">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <div class="panel-icon green">
+            <svg width="20" height="20" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M9 17v-2m3 2v-4m3 4v-6M5 21h14a2 2 0 002-2V7l-5-5H5a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <div>
+            <div class="panel-h1">配銷建議系統</div>
+            <div class="panel-sub">V4.0 — 智能欄位辨識，自動計算各縣市配發建議</div>
+          </div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div id="distrib-root"></div>
+    </div>
+
+    <!-- ══ SAP ══ -->
+    <div class="panel" id="panel-sap">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <div class="panel-icon blue">
+            <svg width="20" height="20" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+          </div>
+          <div>
+            <div class="panel-h1">SAP 舊版配銷匯入格式轉換</div>
+            <div class="panel-sub">處理配發縣市排序，自動備援最新版次</div>
+          </div>
+        </div>
+      </div>
+      <div class="divider"></div>
+
+      <!-- 串聯 banner -->
+      <div class="transfer-banner" id="sapTransferBanner" style="display:none">
+        <div class="transfer-banner-info">
+          <div class="transfer-arrow">
+            <svg width="16" height="16" fill="none" stroke="#7eb3ff" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </div>
+          <div class="transfer-text">
+            <div class="t1">配銷建議已就緒，可直接轉入</div>
+            <div class="t2">偵測到工具 1 已完成計算，點擊右側按鈕可直接使用配銷結果</div>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="loadFromDistrib()">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          從配銷系統轉入
+        </button>
+      </div>
+
+      <!-- Settings -->
+      <div class="card">
+        <div class="settings-grid">
+          <div>
+            <label>本期代碼（同步自頂部設定）</label>
+            <input type="text" id="sapPeriodCode" value="115-1">
+          </div>
+          <div>
+            <label>本期最新版次（自動補備援順位 2）</label>
+            <input type="number" id="sapLatestVersion" value="41" min="1">
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload -->
+      <div class="card">
+        <div class="card-title"><span class="step-num">1</span>上傳建議表（Excel 或 CSV）</div>
+        <div id="sapDropZone" class="drop-zone">
+          <input type="file" id="sapFileInput" class="hidden" accept=".csv,.xlsx,.xls">
+          <svg class="icon" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/></svg>
+          <div class="main-text">點擊或拖放檔案至此</div>
+          <div class="sub-text">自動辨識「配銷縣市(代號)」、「料號」、「版次」欄位</div>
+        </div>
+        <div id="sapStatusArea" class="status"></div>
+        <div id="sapWarnArea" class="warn-list hidden"></div>
+      </div>
+
+      <!-- Result -->
+      <div id="sapResultArea" class="card hidden">
+        <div class="card-title"><span class="step-num">2</span>預覽轉換結果</div>
+        <div id="sapStatsRow" class="stats-row"></div>
+        <div class="toolbar">
+          <input type="text" id="sapFilterInput" class="filter-input" placeholder="搜尋地區或料號...">
+          <button id="sapDownloadBtn" class="btn btn-primary">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            下載 SAP 匯入 Excel
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>銷售地區</th><th>物料號碼</th>
+              <th class="center">版次</th><th class="center">排序</th>
+              <th class="center">啟動不跳版</th><th>有限期限日期</th><th>狀態</th>
+            </tr></thead>
+            <tbody id="sapPreviewTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ BOX ══ -->
+    <div class="panel" id="panel-box">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <div class="panel-icon purple">
+            <svg width="20" height="20" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+            </svg>
+          </div>
+          <div>
+            <div class="panel-h1">併箱組合產生工具</div>
+            <div class="panel-sub">依當期可用版次庫存，自動產出所有版次組合並匯出完整格式</div>
+          </div>
+        </div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="box-mode-tabs">
+        <button class="box-mode-tab active" id="boxTabJH" onclick="boxSwitchMode('JH')">
+          🏫 國中模式<span class="box-mode-badge">同序號 = 同箱</span>
+        </button>
+        <button class="box-mode-tab" id="boxTabES" onclick="boxSwitchMode('ES')">
+          🏫 國小模式<span class="box-mode-badge">甲乙本併箱</span>
+        </button>
+      </div>
+
+      <div class="box-mode-intro" id="boxIntroJH">
+        <b>國中模式規則：</b>「序號」本身代表一個併箱組。同一序號的所有品項會做全交叉組合 (笛卡兒積)。<br>
+        例：序號 1100 有「國文1下課本(51,41)」和「國文1下習作(51,41)」，會產生 4 組。
+      </div>
+      <div class="box-mode-intro" id="boxIntroES" style="display:none">
+        <b>國小模式規則：</b>使用者自行輸入每個品項的「序號」；若有甲乙本要併箱，用「併箱群組」欄位標示同一組代號，工具會把同群組內的品項 (上限 2 本) 做交叉組合。
+      </div>
+
+      <div class="box-section">
+        <h2><span class="step-num" style="background:#2a1a4a;color:#a78bfa">1</span>上傳輸入檔</h2>
+        <div class="btn-group">
+          <label class="file-label" for="boxFileInput">📂 選擇檔案 (.xlsx / .csv)</label>
+          <input type="file" id="boxFileInput" accept=".xlsx,.xls,.csv" style="display:none">
+          <button class="btn btn-ghost" onclick="boxDownloadTemplate()">⬇ 下載輸入範本</button>
+          <button class="btn btn-ghost" onclick="boxLoadExample()">📝 載入範例資料</button>
+          <button class="btn btn-ghost" onclick="boxClearAll()">🗑 清空</button>
+        </div>
+        <details class="help-details" style="margin-top:12px">
+          <summary>📖 輸入格式說明（點擊展開）</summary>
+          <div id="boxHelpJH" style="margin-top:10px">
+            <p style="font-size:0.78rem;color:#6b7280;margin-bottom:8px"><b>國中模式</b> — 需有 4 個欄位：序號、料號、品名、可用版次(逗號分隔)</p>
+            <table class="box-table"><tr><th>序號</th><th>料號</th><th>品名</th><th>可用版次</th></tr>
+            <tr><td>1100</td><td>1010102000</td><td>國中國文１下課本</td><td>51,41</td></tr></table>
+          </div>
+          <div id="boxHelpES" style="display:none;margin-top:10px">
+            <p style="font-size:0.78rem;color:#6b7280;margin-bottom:8px"><b>國小模式</b> — 需有 5 個欄位，加上「併箱群組」</p>
+            <table class="box-table"><tr><th>序號</th><th>料號</th><th>品名</th><th>可用版次</th><th>併箱群組</th></tr>
+            <tr><td>5</td><td>2020105002</td><td>國小國語3上習寫甲</td><td>01,91</td><td>A</td></tr></table>
+          </div>
+        </details>
+      </div>
+
+      <div class="box-section" id="boxEditSection" style="display:none">
+        <h2><span class="step-num" style="background:#2a1a4a;color:#a78bfa">2</span>檢視 / 編輯資料</h2>
+        <div class="box-info-bar" id="boxInputStats"></div>
+        <div class="btn-group" style="margin-bottom:10px">
+          <button class="btn btn-ghost btn-sm" onclick="boxAddRow()">➕ 新增一列</button>
+        </div>
+        <div class="box-table-wrapper">
+          <table class="box-table editable-table" id="boxInputTable">
+            <thead id="boxInputTableHead"></thead>
+            <tbody id="boxInputTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="box-section" id="boxGenerateSection" style="display:none">
+        <h2><span class="step-num" style="background:#2a1a4a;color:#a78bfa">3</span>產生併箱組合</h2>
+        <div class="btn-group">
+          <button class="btn btn-purple" onclick="boxGenerateCombinations()">🚀 產生組合</button>
+        </div>
+        <div id="boxValidationResult"></div>
+      </div>
+
+      <div class="box-section" id="boxResultSection" style="display:none">
+        <h2><span class="step-num" style="background:#2a1a4a;color:#a78bfa">4</span>組合結果</h2>
+        <div class="box-stats" id="boxResultStats"></div>
+        <div class="btn-group" style="margin-bottom:12px">
+          <button class="btn btn-purple" onclick="boxDownloadResult()">⬇ 下載 Excel（完整格式）</button>
+        </div>
+        <div class="box-table-wrapper">
+          <table class="box-table" id="boxResultTable">
+            <thead id="boxResultHead"></thead>
+            <tbody id="boxResultBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ══ 參考書條碼表 ══ -->
+    <div class="panel bc-panel" id="panel-refbc">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <div class="panel-icon" style="background:linear-gradient(135deg,#d97706,#f59e0b)">
+            <svg width="20" height="20" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+            </svg>
+          </div>
+          <div>
+            <div class="panel-h1">參考書條碼表產生器</div>
+            <div class="panel-sub">學習自修 ／ 學習評量 ／ 麻辣講義 ／ 測驗卷 ／ 英語評量</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost" onclick="refbcPrint()" style="align-self:center">🖨 列印 / 儲存 PDF</button>
+      </div>
+      <div class="divider"></div>
+
+      <!-- 期別 -->
+      <div class="card">
+        <div class="card-title"><span class="step-num">1</span>期別設定</div>
+        <div class="bc-period-row">
+          <label>學年：</label>
+          <input type="number" id="rb-year" value="115" min="100" max="200" oninput="rbUpdateTitle()">
+          <label>學期：</label>
+          <select id="rb-sem" onchange="rbUpdateTitle()">
+            <option value="一">上學期（一）</option>
+            <option value="二" selected>下學期（二）</option>
+          </select>
+          <div class="bc-period-preview">標題預覽：<b id="rb-title-preview">115(二)</b></div>
+        </div>
+      </div>
+
+      <!-- 圖片 -->
+      <div class="card">
+        <div class="card-title"><span class="step-num">2</span>上傳條碼圖片資料夾</div>
+        <div class="bc-dz" id="rb-dz" onclick="document.getElementById('rb-fi').click()">
+          <div class="ico">📂</div>
+          <p><strong>點此選擇資料夾</strong>，或直接拖曳至此</p>
+          <p>支援 .jpg / .jpeg　檔名：料號(10碼)+版次(2碼)</p>
+          <div class="bc-fc" id="rb-fc"></div>
+        </div>
+        <input type="file" id="rb-fi" multiple accept=".jpg,.jpeg" webkitdirectory style="display:none">
+      </div>
+
+      <!-- 版次設定 -->
+      <div class="card">
+        <div class="card-title"><span class="step-num">3</span>設定版次 ／ 反紅 ／ 價格</div>
+
+        <div class="bc-global-ver">
+          <label>本期版次：</label>
+          <input type="text" id="rb-g-ver" placeholder="51" maxlength="2">
+          <button class="bc-btn-apply" onclick="rbApplyGlobal()">套用版次到全部 →</button>
+          <button class="bc-btn-clear" onclick="rbClearAllHl()">清除全部反紅</button>
+          <div class="hint" style="font-size:11px;color:#6b7280">📌 勾選格子裡的「反紅」可在 PDF 中標示</div>
+        </div>
+
+        <div class="bc-ovr-note">📌 斜線格 = 此科目無此品項。版次套用後可個別調整。</div>
+        <div style="overflow-x:auto">
+          <table class="bc-ver-table" id="rb-tbl-main" style="min-width:700px"></table>
+        </div>
+
+        <div class="bc-sec-label" style="margin-top:20px">▎ 選填：上傳版次 Excel（自動帶入版次）</div>
+        <div class="bc-dz" id="rb-dz-xl" onclick="document.getElementById('rb-fi-xl').click()" style="padding:14px">
+          <div class="ico" style="font-size:20px;margin-bottom:4px">📊</div>
+          <p><strong>點此上傳 Excel</strong>（格式：康軒版次一覽表 .xlsx）</p>
+          <div class="bc-fc" id="rb-xl-status"></div>
+        </div>
+        <input type="file" id="rb-fi-xl" accept=".xlsx,.xls" style="display:none">
+
+        <div class="bc-sec-label" style="margin-top:20px">▎ 本期調價（選填）</div>
+        <p style="font-size:11px;color:#6b7280;margin-bottom:8px">預設價格已內建，若本期有調整請修改，其他留空</p>
+        <div class="bc-prc-grid">
+          <div class="bc-prc-item"><label>學習自修<br><span style="color:#9ca3af;font-size:10px">國語／數學（預設510）</span></label><input id="rb-p-自修語數" placeholder="510" maxlength="5"></div>
+          <div class="bc-prc-item"><label>學習自修<br><span style="color:#9ca3af;font-size:10px">生活自然／社會（預設410）</span></label><input id="rb-p-自修生社" placeholder="410" maxlength="5"></div>
+          <div class="bc-prc-item"><label>學習評量<br><span style="color:#9ca3af;font-size:10px">一般（預設210）</span></label><input id="rb-p-評量" placeholder="210" maxlength="5"></div>
+          <div class="bc-prc-item"><label>自修式/學習評量<br><span style="color:#9ca3af;font-size:10px">生活1-2年（預設320）</span></label><input id="rb-p-生活評量12" placeholder="320" maxlength="5"></div>
+          <div class="bc-prc-item"><label>麻辣講義<br><span style="color:#9ca3af;font-size:10px">（預設250）</span></label><input id="rb-p-麻辣" placeholder="250" maxlength="5"></div>
+          <div class="bc-prc-item"><label>測驗卷<br><span style="color:#9ca3af;font-size:10px">（預設180）</span></label><input id="rb-p-測驗卷" placeholder="180" maxlength="5"></div>
+          <div class="bc-prc-item"><label>英語評量<br><span style="color:#9ca3af;font-size:10px">（預設210）</span></label><input id="rb-p-英語" placeholder="210" maxlength="5"></div>
+        </div>
+      </div>
+
+      <button class="bc-btn-gen" onclick="rbGenerate()">▶　產生條碼表格</button>
+
+      <!-- 預覽區（inline，不切換頁面）-->
+      <div class="bc-preview-wrap" id="rb-preview-wrap" style="display:none;margin-top:20px">
+        <div id="rb-mi"></div>
+        <div id="rb-parea"></div>
+      </div>
+    </div>
+
+    <!-- ══ 版版補充教材條碼表 ══ -->
+    <div class="panel bc-panel" id="panel-verbc">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <div class="panel-icon" style="background:linear-gradient(135deg,#be185d,#ec4899)">
+            <svg width="20" height="20" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+          </div>
+          <div>
+            <div class="panel-h1">版版補充教材條碼表產生器</div>
+            <div class="panel-sub">習寫簿 ／ 練習簿 ／ 重點複習</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost" onclick="verbcPrint()" style="align-self:center">🖨 列印 / 儲存 PDF</button>
+      </div>
+      <div class="divider"></div>
+
+      <!-- 期別 -->
+      <div class="card">
+        <div class="card-title"><span class="step-num">1</span>期別設定</div>
+        <div class="bc-period-row">
+          <label>學年：</label>
+          <input type="number" id="vb-year" value="115" min="100" max="200" oninput="vbUpdateTitle()">
+          <label>學期：</label>
+          <select id="vb-sem" onchange="vbRebuildAll()">
+            <option value="1">上學期（一）</option>
+            <option value="2" selected>下學期（二）</option>
+          </select>
+          <div class="bc-period-preview">標題預覽：<b id="vb-title-preview">115(二)</b></div>
+        </div>
+      </div>
+
+      <!-- 圖片 -->
+      <div class="card">
+        <div class="card-title"><span class="step-num">2</span>上傳條碼圖片資料夾</div>
+        <div class="bc-dz" id="vb-dz" onclick="document.getElementById('vb-fi').click()">
+          <div class="ico">📂</div>
+          <p><strong>點此選擇資料夾</strong>，或直接拖曳至此</p>
+          <p>支援 .jpg / .jpeg　檔名：料號(10碼)+版次(2碼)</p>
+          <div class="bc-fc" id="vb-fc"></div>
+        </div>
+        <input type="file" id="vb-fi" multiple accept=".jpg,.jpeg" webkitdirectory style="display:none">
+      </div>
+
+      <!-- 版次設定 -->
+      <div class="card">
+        <div class="card-title"><span class="step-num">3</span>設定版次 ／ 價格 ／ 反紅 ／ 備註</div>
+
+        <div class="bc-global-ver">
+          <label>本期版次：</label>
+          <input type="text" id="vb-g-ver" placeholder="51" maxlength="2">
+          <button class="bc-btn-apply" onclick="vbApplyGlobal()">套用版次到全部 →</button>
+          <button class="bc-btn-clear" onclick="vbClearAllHl()">清除全部反紅</button>
+          <div class="hint" style="font-size:11px;color:#6b7280">📌 勾選「反紅」→ PDF 該格變紅字</div>
+        </div>
+
+        <div style="font-size:11px;font-weight:700;color:#1a3a5c;margin:10px 0 6px">
+          ▎ 習寫簿　<span style="font-weight:400;color:#6b7280">（版次 ／ 價格預設45）</span>
+        </div>
+        <table class="bc-ver-table">
+          <thead><tr><th>年級</th><th id="vb-xs-th-a">甲本</th><th>乙本</th>
+            <th style="width:140px;background:#d4b86a;color:#5a3a00">備註（列印可見）</th></tr></thead>
+          <tbody id="vb-xs-body"></tbody>
+        </table>
+
+        <div style="font-size:11px;font-weight:700;color:#1a3a5c;margin:14px 0 6px">
+          ▎ 練習簿　<span style="font-weight:400;color:#6b7280">（版次 ／ 價格預設65）</span>
+        </div>
+        <table class="bc-ver-table">
+          <thead><tr><th>年級</th><th>國語</th><th>數學</th><th>生活／自然</th><th>社會</th>
+            <th style="width:140px;background:#d4b86a;color:#5a3a00">備註（列印可見）</th></tr></thead>
+          <tbody id="vb-lx-body"></tbody>
+        </table>
+
+        <div style="font-size:11px;font-weight:700;color:#1a3a5c;margin:14px 0 6px">
+          ▎ 重點複習　<span style="font-weight:400;color:#6b7280">（版次 ／ 價格預設90，5年自然社會預設100）</span>
+        </div>
+        <table class="bc-ver-table">
+          <thead><tr><th>年級</th><th>國語</th><th>數學</th><th>生活（空）</th><th>自然</th><th>社會</th>
+            <th style="width:140px;background:#d4b86a;color:#5a3a00">備註（列印可見）</th></tr></thead>
+          <tbody id="vb-rv-body"></tbody>
+        </table>
+      </div>
+
+      <button class="bc-btn-gen" onclick="vbGenerate()">▶　產生條碼表格</button>
+
+      <div class="bc-preview-wrap" id="vb-preview-wrap" style="display:none;margin-top:20px">
+        <div id="vb-mi"></div>
+        <div id="vb-parea"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     JAVASCRIPT — Tab switching + Period sync
+═══════════════════════════════════════════ -->
+<script>
+function switchTab(tab) {
+  ['home','distrib','sap','box','refbc','verbc'].forEach(t => {
+    document.getElementById('panel-'+t).classList.toggle('active', t===tab);
+    document.getElementById('nav-'+t).classList.toggle('active', t===tab);
+  });
+  // Show SAP transfer banner if distrib has data
+  if (tab === 'sap') {
+    document.getElementById('sapTransferBanner').style.display =
+      (window.distribResult && window.distribResult.length > 0) ? 'flex' : 'none';
+  }
+}
+
+function syncPeriod(val) {
+  document.getElementById('periodDisplay').textContent = val;
+  document.getElementById('sapPeriodCode').value = val;
+}
+</script>
+
+<!-- ═══════════════════════════════════════════
+     SAP TOOL LOGIC
+═══════════════════════════════════════════ -->
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const dropZone = $('sapDropZone');
+  const fileInput = $('sapFileInput');
+  let processedData = [];
+  let warnings = [];
+
+  dropZone.onclick = () => fileInput.click();
+  dropZone.ondragover = e => { e.preventDefault(); dropZone.classList.add('active'); };
+  dropZone.ondragleave = () => dropZone.classList.remove('active');
+  dropZone.ondrop = e => { e.preventDefault(); dropZone.classList.remove('active'); handleSapFile(e.dataTransfer.files[0]); };
+  fileInput.onchange = e => handleSapFile(e.target.files[0]);
+
+  function showStatus(msg, type='ok') {
+    const el = $('sapStatusArea');
+    el.textContent = msg; el.className = 'status ' + type;
+  }
+
+  window.loadFromDistrib = function() {
+    if (!window.distribResult || window.distribResult.length === 0) return;
+    // Convert distrib CSV output to SAP input format
+    const data = window.distribResult
+      .filter(r => !r.isExempt && r.city && r.city !== '無合適區')
+      .map(r => ({
+        county: r.city,
+        item: r.id,
+        ver: r.version ? parseInt(r.version) : undefined
+      }));
+    warnings = [];
+    processedData = [];
+    $('sapWarnArea').classList.add('hidden');
+    processSapData(data);
+    showStatus(`已從配銷建議系統載入 ${data.length} 筆資料`, 'ok');
+  };
+
+  window.handleSapFile = function(file) {
+    if (!file) return;
+    showStatus('正在讀取並解析檔案格式...', 'warn');
+    $('sapWarnArea').classList.add('hidden');
+    warnings = [];
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.csv')) {
+      Papa.parse(file, {
+        header: false, skipEmptyLines: true,
+        complete: r => processSapData(smartHeaderMap(r.data)),
+        error: err => showStatus('CSV 讀取失敗: ' + err.message, 'err')
+      });
+    } else {
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+          processSapData(smartHeaderMap(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 })));
+        } catch (err) { showStatus('Excel 解析失敗：' + err.message, 'err'); }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  };
+
+  function smartHeaderMap(rows) {
+    const countyKeys = ['配銷縣市(代號)','配銷縣市','縣市代號','縣市','銷售地區','地區'];
+    const itemKeys = ['料號','物料號碼','物料','產品代號','產品料號'];
+    const verKeys = ['版次','版本'];
+    let headerIdx = -1, mapping = {};
+    for (let i = 0; i < Math.min(rows.length, 20); i++) {
+      const row = (rows[i]||[]).map(c => String(c||'').trim());
+      const hasItem = row.some(c => itemKeys.some(k => c.includes(k)));
+      const hasCounty = row.some(c => countyKeys.some(k => c.includes(k)));
+      if (hasItem && hasCounty) {
+        headerIdx = i;
+        row.forEach((cell, ci) => {
+          if (!('item' in mapping) && itemKeys.some(k => cell.includes(k))) mapping.item = ci;
+          if (!('county' in mapping) && countyKeys.some(k => cell.includes(k))) mapping.county = ci;
+          if (!('ver' in mapping) && verKeys.some(k => cell.includes(k))) mapping.ver = ci;
+        });
+        break;
+      }
+    }
+    if (headerIdx === -1) { showStatus('找不到標題列！請確認檔案中包含「配銷縣市」與「料號」欄位。','err'); return []; }
+    if (!('ver' in mapping)) warnings.push('未偵測到「版次」欄位，將只使用最新版次。');
+    return rows.slice(headerIdx+1).filter(r => r && r.length > 0).map(r => ({
+      county: r[mapping.county], item: r[mapping.item],
+      ver: ('ver' in mapping) ? r[mapping.ver] : undefined
+    }));
+  }
+
+  function processSapData(data) {
+    if (!data || data.length === 0) { showStatus('無法從檔案中抓取有效資料，請檢查欄位名稱。','err'); return; }
+    const userLatestVer = parseInt($('sapLatestVersion').value) || 41;
+    const itemMap = new Map();
+    let skippedRows = 0;
+    const excludePatterns = ['排除','無合適','不配','缺書','無庫存','待定'];
+    data.forEach(row => {
+      const countiesRaw = String(row.county||'').trim();
+      const itemCode = String(row.item||'').trim();
+      const ver = row.ver !== undefined ? parseInt(row.ver) : 0;
+      if (!countiesRaw || !itemCode) { skippedRows++; return; }
+      const tokens = countiesRaw.split(/[,，、/／\s]+/)
+        .map(t => t.replace(/[()（）\[\]【】]/g,'').trim()).filter(t => t);
+      tokens.forEach(token => {
+        if (excludePatterns.some(p => token.includes(p))) { warnings.push(`已排除「${itemCode}」中的「${token}」`); return; }
+        if (token.length > 6 && !/^[A-Za-z0-9\-]+$/.test(token)) { warnings.push(`已略過疑似非代碼：「${token}」（料號 ${itemCode}）`); return; }
+        const key = `${itemCode}_${token}`;
+        if (!itemMap.has(key)) itemMap.set(key, { material: itemCode, area: token, versions: new Set() });
+        if (ver > 0) itemMap.get(key).versions.add(ver);
+      });
+    });
+    if (itemMap.size === 0) { showStatus('無法抓取有效的配發資訊，請檢查「配銷縣市(代號)」欄位。','err'); return; }
+    let finalOutput = []; let newVerCount=0, oldVerCount=0;
+    itemMap.forEach(info => {
+      let sorted = Array.from(info.versions).sort((a,b)=>a-b);
+      if (!sorted.includes(userLatestVer)) sorted.push(userLatestVer);
+      sorted.forEach((v, index) => {
+        const isNew = v === userLatestVer;
+        if (isNew) newVerCount++; else oldVerCount++;
+        finalOutput.push({ '銷售地區':info.area,'物料號碼':info.material,'版次':v,'版次排序':index+1,'啟動不跳版':'','有限期限日期':'','_type':isNew?'備援新版':'建議舊版' });
+      });
+    });
+    finalOutput.sort((a,b) => a['銷售地區'].localeCompare(b['銷售地區']) || a['物料號碼'].localeCompare(b['物料號碼']) || a['版次排序']-b['版次排序']);
+    processedData = finalOutput;
+    const uniqueAreas = new Set(finalOutput.map(r=>r['銷售地區'])).size;
+    const uniqueItems = new Set(finalOutput.map(r=>r['物料號碼'])).size;
+    $('sapStatsRow').innerHTML = [
+      {val:finalOutput.length,lbl:'總筆數'},{val:uniqueAreas,lbl:'銷售地區'},
+      {val:uniqueItems,lbl:'物料數'},{val:itemMap.size,lbl:'配發組合'}
+    ].map(s=>`<div class="stat-box"><div class="val">${s.val}</div><div class="lbl">${s.lbl}</div></div>`).join('');
+    renderSapPreview(finalOutput);
+    if (!document.getElementById('sapStatusArea').textContent.includes('載入')) {
+      showStatus(`解析成功！${itemMap.size} 組配發 → ${finalOutput.length} 筆匯入資料（舊版 ${oldVerCount} + 備援新版 ${newVerCount}）${skippedRows?'，略過 '+skippedRows+' 筆空白列':''}`, 'ok');
+    }
+    if (warnings.length > 0) {
+      $('sapWarnArea').innerHTML = `<details><summary>⚠ ${warnings.length} 項處理備註（點擊展開）</summary><ul>${warnings.map(w=>'<li>'+w+'</li>').join('')}</ul></details>`;
+      $('sapWarnArea').classList.remove('hidden');
+    }
+    $('sapResultArea').classList.remove('hidden');
+    // Mark SAP nav badge
+    $('nav-sap-badge').style.display = '';
+  }
+
+  function renderSapPreview(data, limit=150) {
+    $('sapPreviewTable').innerHTML = data.slice(0,limit).map(row=>`
+      <tr>
+        <td class="area">${row['銷售地區']}</td><td>${row['物料號碼']}</td>
+        <td class="center">${row['版次']}</td>
+        <td class="center ${row['版次排序']>1?'sort-highlight':''}">${row['版次排序']}</td>
+        <td class="center">${row['啟動不跳版']}</td><td>${row['有限期限日期']}</td>
+        <td><span class="tag ${row['_type']==='備援新版'?'tag-new':'tag-old'}">${row['_type']}</span></td>
+      </tr>
+    `).join('') + (data.length>limit?`<tr class="more-row"><td colspan="7">僅顯示前 ${limit} 筆，共 ${data.length} 筆</td></tr>`:'');
+  }
+
+  $('sapFilterInput').oninput = () => {
+    const q = $('sapFilterInput').value.trim().toLowerCase();
+    if (!q) { renderSapPreview(processedData); return; }
+    renderSapPreview(processedData.filter(r => r['銷售地區'].toLowerCase().includes(q)||r['物料號碼'].toLowerCase().includes(q)));
+  };
+
+  $('sapDownloadBtn').onclick = () => {
+    if (processedData.length === 0) return;
+    const exportData = processedData.map(({_type, ...rest}) => rest);
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'SAP_IMPORT');
+    ws['!cols'] = [{wch:10},{wch:16},{wch:8},{wch:8},{wch:12},{wch:15}];
+    XLSX.writeFile(wb, `SAP_舊版配銷建議_${$('sapPeriodCode').value||'115-1'}.xlsx`);
+  };
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════
+     BOX TOOL LOGIC
+═══════════════════════════════════════════ -->
+<script>
+(function(){
+  let boxMode = 'JH';
+  let boxInputData = [];
+  let boxResultData = [];
+  let boxResultMaxCols = 0;
+
+  const EXAMPLE_JH = [
+    {sn:'1100',code:'1010102000',name:'國中國文１下課本',vers:'51,41'},
+    {sn:'1100',code:'1010102001',name:'國中國文１下習作',vers:'51,41'},
+    {sn:'1101',code:'1010104000',name:'國中國文２下課本',vers:'51'},
+    {sn:'1101',code:'1010104001',name:'國中國文２下習作',vers:'51'},
+    {sn:'1102',code:'1010106000',name:'國中國文３下課本',vers:'51,41,31'},
+    {sn:'1102',code:'1010106001',name:'國中國文３下習作',vers:'51,41,31'},
+  ];
+  const EXAMPLE_ES = [
+    {sn:'1',code:'2020100002',name:'國小國語首冊語文習寫簿',vers:'01',group:''},
+    {sn:'2',code:'2020101002',name:'國小國語１上語文習寫簿',vers:'01',group:''},
+    {sn:'3',code:'2020103002',name:'國小國語2上語文習寫簿甲',vers:'01,91',group:'A'},
+    {sn:'4',code:'2020103003',name:'國小國語2上語文習寫簿乙',vers:'01,91',group:'A'},
+    {sn:'5',code:'2020105002',name:'國小國語3上語文習寫簿甲',vers:'01',group:'B'},
+    {sn:'6',code:'2020105003',name:'國小國語3上語文習寫簿乙',vers:'01',group:'B'},
+  ];
+
+  window.boxSwitchMode = function(m) {
+    if (m === boxMode) return;
+    boxMode = m;
+    document.getElementById('boxTabJH').classList.toggle('active', m==='JH');
+    document.getElementById('boxTabES').classList.toggle('active', m==='ES');
+    document.getElementById('boxIntroJH').style.display = m==='JH'?'block':'none';
+    document.getElementById('boxIntroES').style.display = m==='ES'?'block':'none';
+    document.getElementById('boxHelpJH').style.display = m==='JH'?'block':'none';
+    document.getElementById('boxHelpES').style.display = m==='ES'?'block':'none';
+    boxClearAll();
+  };
+
+  window.boxLoadExample = function() {
+    boxInputData = (boxMode==='JH'?EXAMPLE_JH:EXAMPLE_ES).map(r=>({...r}));
+    boxRenderInputTable();
+  };
+
+  window.boxClearAll = function() {
+    boxInputData=[]; boxResultData=[];
+    document.getElementById('boxEditSection').style.display='none';
+    document.getElementById('boxGenerateSection').style.display='none';
+    document.getElementById('boxResultSection').style.display='none';
+    document.getElementById('boxValidationResult').innerHTML='';
+    document.getElementById('boxFileInput').value='';
+  };
+
+  window.boxAddRow = function() {
+    boxInputData.push(boxMode==='JH'?{sn:'',code:'',name:'',vers:''}:{sn:'',code:'',name:'',vers:'',group:''});
+    boxRenderInputTable();
+  };
+
+  window.boxUpdateCell = function(idx,field,val) {
+    boxInputData[idx][field]=val.trim(); boxUpdateInputStats();
+  };
+
+  window.boxDeleteRow = function(idx) {
+    boxInputData.splice(idx,1); boxRenderInputTable();
+  };
+
+  function escH(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  document.getElementById('boxFileInput').addEventListener('change', function(e){
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt){
+      try {
+        const wb = XLSX.read(new Uint8Array(evt.target.result),{type:'array'});
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+        boxParseInputRows(rows);
+      } catch(err){ alert('讀取檔案失敗:'+err.message); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  function boxParseInputRows(rows){
+    if (rows.length<2){alert('檔案沒有資料');return;}
+    boxInputData=[];
+    for(let i=1;i<rows.length;i++){
+      const r=rows[i]; if(!r||r.length===0) continue;
+      const sn=String(r[0]??'').trim(), code=String(r[1]??'').trim(),
+            name=String(r[2]??'').trim(), vers=String(r[3]??'').trim(),
+            group=String(r[4]??'').trim();
+      if(!sn&&!code&&!name&&!vers) continue;
+      boxInputData.push(boxMode==='JH'?{sn,code,name,vers}:{sn,code,name,vers,group});
+    }
+    boxRenderInputTable();
+  }
+
+  function boxRenderInputTable(){
+    const thead=document.getElementById('boxInputTableHead');
+    const tbody=document.getElementById('boxInputTableBody');
+    thead.innerHTML = boxMode==='JH'
+      ? `<tr><th style="width:80px">序號</th><th style="width:140px">料號</th><th>品名</th><th style="width:180px">可用版次(逗號分隔)</th><th class="action-col">刪除</th></tr>`
+      : `<tr><th style="width:70px">序號</th><th style="width:140px">料號</th><th>品名</th><th style="width:160px">可用版次(逗號分隔)</th><th style="width:90px">併箱群組</th><th class="action-col">刪除</th></tr>`;
+    tbody.innerHTML='';
+    boxInputData.forEach((r,idx)=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML = boxMode==='JH'
+        ? `<td><input value="${escH(r.sn)}" onchange="boxUpdateCell(${idx},'sn',this.value)"></td><td><input value="${escH(r.code)}" onchange="boxUpdateCell(${idx},'code',this.value)"></td><td><input value="${escH(r.name)}" onchange="boxUpdateCell(${idx},'name',this.value)"></td><td><input value="${escH(r.vers)}" onchange="boxUpdateCell(${idx},'vers',this.value)"></td><td class="action-col"><button class="btn btn-danger btn-sm" onclick="boxDeleteRow(${idx})">✕</button></td>`
+        : `<td><input value="${escH(r.sn)}" onchange="boxUpdateCell(${idx},'sn',this.value)"></td><td><input value="${escH(r.code)}" onchange="boxUpdateCell(${idx},'code',this.value)"></td><td><input value="${escH(r.name)}" onchange="boxUpdateCell(${idx},'name',this.value)"></td><td><input value="${escH(r.vers)}" onchange="boxUpdateCell(${idx},'vers',this.value)"></td><td><input value="${escH(r.group||'')}" onchange="boxUpdateCell(${idx},'group',this.value)" placeholder="留空=獨立"></td><td class="action-col"><button class="btn btn-danger btn-sm" onclick="boxDeleteRow(${idx})">✕</button></td>`;
+      tbody.appendChild(tr);
+    });
+    boxUpdateInputStats();
+    document.getElementById('boxEditSection').style.display='block';
+    document.getElementById('boxGenerateSection').style.display='block';
+    document.getElementById('boxResultSection').style.display='none';
+  }
+
+  function boxUpdateInputStats(){
+    if (boxMode==='JH'){
+      const groups={}; boxInputData.forEach(r=>{if(r.sn) groups[r.sn]=(groups[r.sn]||0)+1;});
+      document.getElementById('boxInputStats').innerHTML=`📊 目前共 <b>${boxInputData.length}</b> 筆品項，分屬 <b>${Object.keys(groups).length}</b> 個序號(併箱組)`;
+    } else {
+      const grouped=boxInputData.filter(r=>r.group).length, alone=boxInputData.filter(r=>!r.group).length;
+      const groupCodes=new Set(boxInputData.filter(r=>r.group).map(r=>r.group));
+      document.getElementById('boxInputStats').innerHTML=`📊 目前共 <b>${boxInputData.length}</b> 筆品項，其中 <b>${grouped}</b> 筆有併箱群組 (${groupCodes.size} 組)，<b>${alone}</b> 筆獨立成箱`;
+    }
+  }
+
+  function cartesian(arrays){
+    if(arrays.length===0) return [[]];
+    let result=[[]];
+    for(let i=arrays.length-1;i>=0;i--){
+      const cur=arrays[i], next=[];
+      result.forEach(a=>cur.forEach(c=>next.push([c,...a])));
+      result=next;
+    }
+    return result;
+  }
+
+  window.boxGenerateCombinations = function(){
+    const errors=[];
+    boxInputData.forEach((r,idx)=>{
+      const rowNo=idx+1;
+      if(!r.sn) errors.push(`第 ${rowNo} 列: 序號空白`);
+      if(!r.code) errors.push(`第 ${rowNo} 列: 料號空白`);
+      if(!r.vers) errors.push(`第 ${rowNo} 列 (料號 ${r.code}): 可用版次空白`);
+    });
+    if(boxMode==='ES'){
+      const groupMap={};
+      boxInputData.forEach((r,idx)=>{ if(r.group){ if(!groupMap[r.group]) groupMap[r.group]=[]; groupMap[r.group].push({...r,rowNo:idx+1}); } });
+      Object.entries(groupMap).forEach(([g,items])=>{ if(items.length>2) errors.push(`併箱群組「${g}」有 ${items.length} 個品項，國小模式上限為 2 本`); });
+    }
+    const vr=document.getElementById('boxValidationResult');
+    if(errors.length){ vr.innerHTML=`<div class="box-error-bar"><b>⚠ 輸入有錯誤：</b><br>${errors.slice(0,10).join('<br>')}${errors.length>10?`<br>...還有 ${errors.length-10} 個`:''}</div>`; return; }
+    boxResultData=[]; boxResultMaxCols=0;
+    if(boxMode==='JH') boxGenerateJH(); else boxGenerateES();
+    vr.innerHTML=`<div class="box-info-bar">✅ 產生成功</div>`;
+    boxRenderResultTable();
+    document.getElementById('boxResultSection').style.display='block';
+    document.getElementById('boxResultSection').scrollIntoView({behavior:'smooth'});
+  };
+
+  function boxGenerateJH(){
+    const groups={}, snOrder=[];
+    boxInputData.forEach(r=>{ if(!groups[r.sn]){groups[r.sn]=[];snOrder.push(r.sn);} groups[r.sn].push(r); });
+    snOrder.forEach(sn=>{
+      const items=groups[sn], verLists=items.map(it=>it.vers.split(',').map(v=>v.trim()).filter(v=>v));
+      const combos=cartesian(verLists);
+      items.forEach((it,itemIdx)=>{
+        const versSeq=combos.map(c=>c[itemIdx]);
+        boxResultData.push({sn:it.sn,code:it.code,name:it.name,versSeq});
+        if(versSeq.length>boxResultMaxCols) boxResultMaxCols=versSeq.length;
+      });
+    });
+  }
+
+  function boxGenerateES(){
+    const processed=new Set();
+    boxInputData.forEach((r,idx)=>{
+      if(processed.has(idx)) return;
+      if(!r.group){
+        const versList=r.vers.split(',').map(v=>v.trim()).filter(v=>v);
+        boxResultData.push({sn:r.sn,code:r.code,name:r.name,versSeq:versList});
+        if(versList.length>boxResultMaxCols) boxResultMaxCols=versList.length;
+        processed.add(idx);
+      } else {
+        const groupItems=[],groupIndices=[];
+        boxInputData.forEach((r2,idx2)=>{ if(r2.group===r.group&&!processed.has(idx2)){groupItems.push(r2);groupIndices.push(idx2);} });
+        const verLists=groupItems.map(it=>it.vers.split(',').map(v=>v.trim()).filter(v=>v));
+        const combos=cartesian(verLists);
+        groupItems.forEach((it,itemIdx)=>{
+          const versSeq=combos.map(c=>c[itemIdx]);
+          boxResultData.push({sn:it.sn,code:it.code,name:it.name,versSeq});
+          if(versSeq.length>boxResultMaxCols) boxResultMaxCols=versSeq.length;
+        });
+        groupIndices.forEach(i=>processed.add(i));
+      }
+    });
+  }
+
+  function boxRenderResultTable(){
+    const head=document.getElementById('boxResultHead'), body=document.getElementById('boxResultBody');
+    const stats=document.getElementById('boxResultStats');
+    const numCombos=boxResultMaxCols, totalCombos=boxResultData.reduce((s,r)=>s+r.versSeq.length,0);
+    const uniqueSn=new Set(boxResultData.map(r=>r.sn)).size;
+    stats.innerHTML=`<div class="box-stat-card"><div class="box-stat-label">品項總數</div><div class="box-stat-value">${boxResultData.length}</div></div><div class="box-stat-card"><div class="box-stat-label">序號數</div><div class="box-stat-value">${uniqueSn}</div></div><div class="box-stat-card"><div class="box-stat-label">組合欄位數</div><div class="box-stat-value">${numCombos}</div></div><div class="box-stat-card"><div class="box-stat-label">組合總量</div><div class="box-stat-value">${totalCombos}</div></div>`;
+    let headHtml='<tr><th>序號</th><th>料號</th><th>品名</th>';
+    for(let i=1;i<=numCombos;i++) headHtml+=`<th>組合方式${i}</th>`;
+    headHtml+='<th>終止</th></tr>'; head.innerHTML=headHtml;
+    let bodyHtml='';
+    boxResultData.forEach(r=>{
+      let row=`<tr><td>${escH(r.sn)}</td><td>${escH(r.code)}</td><td>${escH(r.name)}</td>`;
+      for(let i=0;i<numCombos;i++){
+        if(i<r.versSeq.length) row+=`<td>${escH(r.versSeq[i])}</td>`;
+        else if(i===r.versSeq.length) row+=`<td class="terminator">*</td>`;
+        else row+='<td></td>';
+      }
+      row+=(r.versSeq.length===numCombos?`<td class="terminator">*</td>`:`<td></td>`)+'</tr>';
+      bodyHtml+=row;
+    });
+    body.innerHTML=bodyHtml;
+  }
+
+  window.boxDownloadResult = function(){
+    const numCombos=boxResultMaxCols, aoa=[];
+    const headerCode=boxMode==='JH'?'142':'1141';
+    aoa.push([headerCode,'02','併箱資料表','','整箱']); aoa.push([]);
+    const header=['序號','料號','品名'];
+    for(let i=1;i<=numCombos;i++) header.push(`組合方式${i}`);
+    aoa.push(header);
+    boxResultData.forEach(r=>{
+      const row=[r.sn,r.code,r.name];
+      for(let i=0;i<numCombos;i++){
+        if(i<r.versSeq.length) row.push(r.versSeq[i]);
+        else if(i===r.versSeq.length) row.push('*');
+        else row.push('');
+      }
+      if(r.versSeq.length===numCombos) row.push('*');
+      aoa.push(row);
+    });
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:8},{wch:15},{wch:30}]; for(let i=0;i<numCombos+1;i++) ws['!cols'].push({wch:10});
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'併箱資料表');
+    XLSX.writeFile(wb, `併箱組合結果_${boxMode==='JH'?'國中':'國小'}_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.xlsx`);
+  };
+
+  window.boxDownloadTemplate = function(){
+    const wb=XLSX.utils.book_new();
+    let data, cols, filename;
+    if(boxMode==='JH'){
+      data=[['序號','料號','品名','可用版次(逗號分隔)'],...EXAMPLE_JH.map(r=>[r.sn,r.code,r.name,r.vers])];
+      cols=[{wch:10},{wch:15},{wch:30},{wch:25}]; filename='併箱組合_國中模式_範本.xlsx';
+    } else {
+      data=[['序號','料號','品名','可用版次(逗號分隔)','併箱群組'],...EXAMPLE_ES.map(r=>[r.sn,r.code,r.name,r.vers,r.group])];
+      cols=[{wch:8},{wch:15},{wch:30},{wch:25},{wch:12}]; filename='併箱組合_國小模式_範本.xlsx';
+    }
+    const ws=XLSX.utils.aoa_to_sheet(data); ws['!cols']=cols;
+    XLSX.utils.book_append_sheet(wb,ws,'輸入範本');
+    XLSX.writeFile(wb,filename);
+  };
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════
+     DISTRIB SYSTEM (React) — full V4 logic
+═══════════════════════════════════════════ -->
+<script type="text/babel">
+const { useState, useRef } = React;
+
+const COL_PROFILES = {
+  inv_id:   { keywords:['產品編號','料號','產品代號','品號','編號','物料','材料號','商品編號','product','id','code','item'], excludes:[], label:'料號' },
+  inv_name: { keywords:['產品名稱','品名','商品名稱','名稱','品項','name','description','產品','書名','教材名'], excludes:['代號','編號','料號'], label:'產品名稱' },
+  inv_ver:  { keywords:['版次','版本','version','ver','edition','刷次','印次'], excludes:[], label:'版次' },
+  inv_qty:  { keywords:['剩餘之可用量','庫存量','可用量','庫存','餘量','stock','qty','quantity','數量','剩餘','可用','結存','在庫'], excludes:['銷','出貨','需求'], label:'庫存量' },
+  sales_id: { keywords:['產品代號','料號','產品編號','品號','編號','物料','code','id','item'], excludes:[], label:'料號' },
+  sales_city:{ keywords:['縣市','區別','區域','地區','城市','county','city','region','district','分區','營業所','轄區'], excludes:['產品','代號','料號','名稱','品名','編號'], label:'縣市' },
+  sales_qty:{ keywords:['出貨量','合計','銷量','銷售量','出貨','需求量','數量','qty','sales','total','小計','訂量','訂購'], excludes:['庫存','剩餘','在庫'], label:'出貨量' },
+  rev_id:   { keywords:['料號','產品編號','產品代號','品號','編號','code','id'], excludes:[], label:'料號' },
+  rev_note: { keywords:['修訂重點','說明','備註','修訂','差異','異動','note','remark','description','內容','比較','對照'], excludes:[], label:'修訂說明' },
+};
+const fuzzyMatch=(cellValue,profile)=>{const v=String(cellValue||'').trim().toLowerCase();if(!v)return false;if(profile.excludes.some(k=>v.includes(k.toLowerCase())))return false;return profile.keywords.some(k=>v.includes(k.toLowerCase())||k.toLowerCase().includes(v));};
+const smartFindColumn=(rows,profileKey)=>{const profile=COL_PROFILES[profileKey];for(let i=0;i<Math.min(rows.length,30);i++){const row=rows[i];if(!row)continue;for(let j=0;j<row.length;j++){if(fuzzyMatch(row[j],profile))return{index:j,label:String(row[j]).trim(),row:i};}}return{index:-1,label:'',row:-1};};
+
+const App = () => {
+  const [inventoryData, setInventoryData] = useState([]);
+  const [salesData, setSalesData] = useState([]);
+  const [revisionData, setRevisionData] = useState([]);
+  const [cityMappingData, setCityMappingData] = useState([]);
+  const [processedResult, setProcessedResult] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [rawRows, setRawRows] = useState({ inv:[], sales:[], rev:[] });
+  const [mappingModal, setMappingModal] = useState(null);
+  const [detectedCols, setDetectedCols] = useState({ inv:{}, sales:{}, rev:{} });
+  const [calcLog, setCalcLog] = useState([]);
+  const [revisionGrades, setRevisionGrades] = useState([1,3,5]);
+  const [stockBuffer, setStockBuffer] = useState(50);
+
+  const processFile = (file, callback) => {
+    const reader = new FileReader();
+    const isExcel = /\.xlsx?$/i.test(file.name);
+    reader.onload = e => {
+      try {
+        let rows;
+        if (isExcel) { const wb=XLSX.read(e.target.result,{type:'binary'}); rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1}); }
+        else { rows=e.target.result.split(/\r?\n/).map(l=>l.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g)?.map(m=>m.replace(/^"|"$/g,'').trim())||[]); }
+        callback(rows);
+      } catch(err){ console.error(err); }
+    };
+    isExcel ? reader.readAsBinaryString(file) : reader.readAsText(file);
+  };
+
+  const tryParseComplexRevision = (rows) => {
+    let usageRow=-1, usageGroups=[];
+    for(let i=0;i<Math.min(rows.length,10);i++){
+      const r=rows[i]; if(!r) continue;
+      const groups=[];
+      for(let j=0;j<r.length-2;j++){
+        if(String(r[j]||'').trim()==='混用'&&String(r[j+1]||'').trim()==='限區'&&String(r[j+2]||'').trim()==='報廢') groups.push(j);
+      }
+      if(groups.length>0){usageRow=i;usageGroups=groups;break;}
+    }
+    if(usageGroups.length===0) return null;
+    let idCol=-1;
+    for(let i=0;i<Math.min(rows.length,10);i++){const r=rows[i];if(!r)continue;for(let j=0;j<r.length;j++){if(String(r[j]||'').trim().includes('料號')){idCol=j;break;}}if(idCol>=0)break;}
+    if(idCol<0) return null;
+    let noteCol=-1;
+    for(let i=0;i<Math.min(rows.length,10);i++){const r=rows[i];if(!r)continue;for(let j=0;j<r.length;j++){const v=String(r[j]||'').trim();if(v.includes('修訂重點')||v.includes('修訂說明')||v.includes('補充說明')){noteCol=j;break;}}if(noteCol>=0)break;}
+    let versionLabels={};
+    if(usageRow>0){const prevRow=rows[usageRow-1];if(prevRow){usageGroups.forEach(gStart=>{for(let scan=gStart;scan>=Math.max(0,gStart-3);scan--){const v=prevRow[scan];if(v!==null&&v!==undefined&&String(v).trim()!==''){versionLabels[gStart]=String(v).trim()+'版';break;}}});}}
+    const data=[];
+    for(let i=usageRow+1;i<rows.length;i++){
+      const r=rows[i];if(!r)continue;
+      const rawId=r[idCol];if(!rawId||!String(rawId).match(/^2020/))continue;
+      const id=String(rawId).trim().split('.')[0];
+      const recommendations=[];
+      usageGroups.forEach(gStart=>{
+        const hasMix=r[gStart]&&String(r[gStart]).trim().toLowerCase()==='v';
+        const hasLimit=r[gStart+1]&&String(r[gStart+1]).trim().toLowerCase()==='v';
+        const hasScrap=r[gStart+2]&&String(r[gStart+2]).trim().toLowerCase()==='v';
+        const label=versionLabels[gStart]||'';
+        if(hasMix) recommendations.push(label+'混用');
+        else if(hasLimit) recommendations.push(label+'限區');
+        else if(hasScrap) recommendations.push(label+'報廢');
+      });
+      const noteText=noteCol>=0&&r[noteCol]?String(r[noteCol]).replace(/[\r\n]+/g,' ').trim():'';
+      const usageNote=recommendations.length>0?recommendations.join('、'):'混用';
+      data.push({id,note:noteText||'',usage:usageNote});
+    }
+    return data.length>0?{data}:null;
+  };
+
+  const handleUpload = (type, file) => {
+    if (!file) return;
+    processFile(file, rows => {
+      setRawRows(prev=>({...prev,[type]:rows}));
+      if(type==='rev'){const parsed=tryParseComplexRevision(rows);if(parsed){setRevisionData(parsed.data);setDetectedCols(prev=>({...prev,rev:{id:'料號(自動)',note:`修訂重點+建議(${parsed.data.length}筆)`}}));setCalcLog(prev=>[...prev,`修訂對照表：偵測到複雜版對版格式，已解析 ${parsed.data.length} 筆`]);return;}}
+      let cols={};
+      if(type==='inv') cols={id:smartFindColumn(rows,'inv_id'),name:smartFindColumn(rows,'inv_name'),ver:smartFindColumn(rows,'inv_ver'),qty:smartFindColumn(rows,'inv_qty')};
+      else if(type==='sales') cols={id:smartFindColumn(rows,'sales_id'),city:smartFindColumn(rows,'sales_city'),qty:smartFindColumn(rows,'sales_qty')};
+      else cols={id:smartFindColumn(rows,'rev_id'),note:smartFindColumn(rows,'rev_note')};
+      setMappingModal({type,cols,rows});
+    });
+  };
+
+  const confirmMapping = (type, cols) => {
+    const rows=rawRows[type];
+    if(type==='inv'){setDetectedCols(prev=>({...prev,inv:{id:cols.id.label||`欄${cols.id.index}`,qty:cols.qty.label||`欄${cols.qty.index}`}}));setInventoryData(rows.filter(r=>r[cols.id.index]&&String(r[cols.id.index]).match(/^2020/)).map(r=>({id:String(r[cols.id.index]).trim().split('.')[0],name:String(r[cols.name.index]||'').trim(),version:String(r[cols.ver.index]||'').trim().split('.')[0],qty:parseFloat(r[cols.qty.index])||0})));}
+    else if(type==='sales'){setDetectedCols(prev=>({...prev,sales:{id:cols.id.label,city:cols.city.label||`欄${cols.city.index}`,qty:cols.qty.label||`欄${cols.qty.index}`}}));setSalesData(rows.filter(r=>r[cols.id.index]&&String(r[cols.id.index]).match(/^2020/)).map(r=>({id:String(r[cols.id.index]).trim().split('.')[0],city:String(r[cols.city.index]||'').trim(),qty:parseFloat(r[cols.qty.index])||0})));}
+    else{setDetectedCols(prev=>({...prev,rev:{id:cols.id.label,note:cols.note.label}}));setRevisionData(rows.filter(r=>r[cols.id.index]&&String(r[cols.id.index]).match(/^2020/)).map(r=>({id:String(r[cols.id.index]).trim().split('.')[0],note:String(r[cols.note.index]||"混用").replace(/[\r\n]+/g,' ').trim()})));}
+    setMappingModal(null);
+  };
+
+  const runDistribution = () => {
+    setLoading(true); setCalcLog(["系統啟動...","正在建立銷量索引..."]);
+    setTimeout(() => {
+      const salesMap={};
+      salesData.forEach(item=>{if(!salesMap[item.id])salesMap[item.id]=[];salesMap[item.id].push({city:item.city,qty:item.qty});});
+      const results=inventoryData.map(inv=>{
+        const gm=inv.name.match(/[123456１２３４５６]/);
+        const grade=gm?(parseInt(gm[0])||{'１':1,'２':2,'３':3,'４':4,'５':5,'６':6}[gm[0]]):null;
+        const isRev=grade&&revisionGrades.includes(grade);
+        let ac=[],tas=0,cs=isRev?"改版排除":"";
+        if(!isRev){const cands=(salesMap[inv.id]||[]).filter(s=>s.qty>0).sort((a,b)=>b.qty-a.qty);for(const c of cands){if(tas+c.qty+stockBuffer<=inv.qty){ac.push(c);tas+=c.qty;}}cs=ac.length>1?`多區組合(${ac.length})`:ac.length===1?"OK":"庫存不足";}
+        const ri=revisionData.find(r=>r.id===inv.id);
+        const gcn=code=>cityMappingData.find(m=>m.code===code)?.name||"";
+        const editNote=ri?ri.note:'', usageNote=ri?(ri.usage||''):'混用';
+        const fullCheck=cs+(usageNote?'｜'+usageNote:'');
+        return{product:inv.name,id:inv.id,version:inv.version,stock:inv.qty,city:isRev?"改版排除":(ac.length>0?ac.map(c=>c.city).join(','):"無合適區"),cityDetail:isRev?"-":ac.map(c=>{const n=gcn(c.city);return n?`${n}(${c.city}):${c.qty}`:`${c.city}:${c.qty}`;}).join(', '),citySales:tas,remaining:isRev?0:(inv.qty-tas),checkStatus:fullCheck,note:editNote,isExempt:isRev,cityCount:ac.length};
+      }).filter(item=>item.stock>0);
+      const sorted=results.sort((a,b)=>a.isExempt===b.isExempt?0:a.isExempt?1:-1);
+      setProcessedResult(sorted);
+      window.distribResult = sorted; // expose for SAP transfer
+      // update badge
+      document.getElementById('nav-distrib-badge').style.display='';
+      setCalcLog(prev=>[...prev,`計算完成，共 ${sorted.length} 筆產品。`]);
+      setLoading(false);
+    }, 600);
+  };
+
+  const downloadCSV = () => {
+    const period = document.getElementById('globalPeriod').value || '115-1';
+    const headers=["產品","料號","版次","庫存量","配銷縣市(代號)","與最新版內容比較說明","各區銷量明細(檢核用)","合計銷量","預留後剩餘","檢核建議"];
+    const esc=v=>{let s=String(v??'');if(s.includes('"')||s.includes(','))s='"'+s.replace(/"/g,'""')+'"';return s.replace(/[\r\n]+/g,' ');};
+    const rows=processedResult.map(r=>[esc(r.product),esc(r.id),esc(r.version),esc(r.stock),esc(r.city),esc(r.note),esc(r.cityDetail),esc(r.citySales),esc(r.remaining),esc(r.checkStatus)]);
+    const csv="\ufeff"+[headers,...rows].map(e=>e.join(",")).join("\n");
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+    a.download=`${period}_配銷建議_${new Date().toLocaleDateString()}.csv`;a.click();
+  };
+
+  const handleCityMappingUpload = file => {
+    if(!file) return;
+    processFile(file, rows=>{
+      const mapping=[];
+      rows.slice(1).forEach(r=>{if(r[0]&&r[1])mapping.push({code:String(r[0]).trim(),name:String(r[1]).trim()});if(r[2]&&r[3])mapping.push({code:String(r[2]).trim(),name:String(r[3]).trim()});});
+      setCityMappingData(mapping);
+    });
+  };
+
+  const UploadCard = ({title,hint,onFile,ok,count,optional})=>{
+    const ref=useRef();
+    return(<div onClick={()=>!ok&&ref.current?.click()} style={{padding:16,borderRadius:12,border:ok?'2px solid #86efac':optional?'2px dashed #dde1e8':'2px solid #dde1e8',background:ok?'#f0fdf4':'#ffffff',cursor:'pointer',position:'relative',overflow:'hidden',transition:'all 0.2s'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6}}>
+        <div><div style={{fontWeight:700,color:ok?'#16a34a':'#1a1d23',fontSize:13}}>{title}{optional&&<span style={{fontSize:9,background:'#eef0f4',color:'#6b7280',padding:'1px 6px',borderRadius:4,marginLeft:6}}>可選</span>}</div><div style={{color:'#6b7280',fontSize:10}}>{hint}</div></div>
+        <div style={{width:26,height:26,borderRadius:'50%',background:ok?'#0d9488':'#eef0f4',display:'flex',alignItems:'center',justifyContent:'center'}}>
+          {ok?<svg width="13" height="13" fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3"/></svg>:<svg width="13" height="13" fill="none" stroke="#4b5563" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>}
+        </div>
+      </div>
+      <input ref={ref} type="file" accept=".xls,.xlsx,.csv" onChange={e=>{if(e.target.files[0])onFile(e.target.files[0]);}} style={{display:'none'}}/>
+      {ok&&<div style={{marginTop:10,display:'inline-flex',alignItems:'center',gap:6,background:'#f0fdf4',padding:'3px 10px',borderRadius:9999,fontSize:10,color:'#16a34a',fontWeight:700,border:'1px solid #86efac'}}><div style={{width:5,height:5,borderRadius:'50%',background:'#16a34a'}}/> 已讀取 {count} 筆</div>}
+    </div>);
+  };
+
+  const MappingModal = ({type,cols,rows,onConfirm,onCancel}) => {
+    const [localCols,setLocalCols]=useState(cols);
+    const FIELD_LABELS={inv:{id:'料號欄',name:'產品名稱欄',ver:'版次欄',qty:'庫存數量欄'},sales:{id:'料號欄',city:'縣市/區域欄',qty:'出貨量欄'},rev:{id:'料號欄',note:'修訂說明欄'}};
+    const fields=FIELD_LABELS[type];
+    const allHeaders=[];
+    for(let j=0;j<(rows[0]?.length||0);j++){let label='';for(let i=0;i<Math.min(rows.length,30);i++){const v=String(rows[i]?.[j]||'').trim();if(v&&v.length<30){label=v;break;}}allHeaders.push({index:j,label:label||`(欄 ${j+1})`});}
+    const previewStart=Math.max(0,(Object.values(localCols)[0]?.row||0)+1);
+    const previewRows=rows.slice(previewStart,previewStart+5).filter(r=>r&&r.length>0);
+    const allMapped=Object.values(localCols).every(c=>c.index>=0);
+    const hasMissing=Object.values(cols).some(c=>c.index<0);
+    const TYPE_LABELS={inv:'庫存表',sales:'銷量表',rev:'修訂對照表'};
+    return(
+      <div className="distrib-modal-backdrop">
+        <div className="distrib-modal-card" style={{maxWidth:680,maxHeight:'90vh'}}>
+          <div style={{padding:16,borderBottom:'1px solid #dde1e8',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div><div style={{fontSize:15,fontWeight:900,color:'#1a1d23'}}>確認「{TYPE_LABELS[type]}」欄位對應</div><div style={{fontSize:11,color:'#6b7280'}}>{hasMissing?'有欄位無法自動辨識，請手動選擇':'系統已自動辨識，請確認是否正確'}</div></div>
+            <button onClick={onCancel} style={{background:'none',border:0,color:'#6b7280',cursor:'pointer',fontSize:18}}>✕</button>
+          </div>
+          <div style={{padding:16}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
+              {Object.entries(fields).map(([key,label])=>{
+                const col=localCols[key]; const isOk=col?.index>=0;
+                return(<div key={key} style={{padding:10,borderRadius:10,border:`2px solid ${isOk?'#86efac':'#fca5a5'}`,background:isOk?'#f0fdf4':'#fef2f2'}}>
+                  <div style={{fontSize:11,fontWeight:700,color:'#6b7280',marginBottom:5}}>{label}</div>
+                  <select className="distrib-select" value={col?.index??-1} onChange={e=>{const idx=parseInt(e.target.value);const picked=allHeaders.find(h=>h.index===idx);setLocalCols(prev=>({...prev,[key]:{index:idx,label:picked?.label||'',row:col?.row??0}}));}}>
+                    <option value={-1}>— 請選擇 —</option>
+                    {allHeaders.map(h=><option key={h.index} value={h.index}>欄 {String.fromCharCode(65+h.index)}：{h.label}</option>)}
+                  </select>
+                  {isOk&&<div style={{marginTop:3,fontSize:9,color:'#16a34a',fontFamily:'monospace'}}>偵測到：「{col.label}」</div>}
+                </div>);
+              })}
+            </div>
+            <div style={{fontSize:11,fontWeight:700,color:'#6b7280',marginBottom:6}}>資料預覽（前 5 筆）</div>
+            <div style={{overflowX:'auto',borderRadius:6,border:'1px solid #dde1e8'}}>
+              <table style={{width:'100%',fontSize:10,borderCollapse:'collapse'}}>
+                <thead><tr style={{background:'#ffffff'}}>{Object.entries(fields).map(([key,label])=>(<th key={key} style={{padding:'7px 10px',textAlign:'left',fontWeight:700,color:localCols[key]?.index>=0?'#16a34a':'#ef4444',fontSize:9}}>{label}</th>))}</tr></thead>
+                <tbody>{previewRows.map((row,i)=>(<tr key={i} style={{borderTop:'1px solid #eef0f4'}}>{Object.entries(fields).map(([key])=>{const idx=localCols[key]?.index;return<td key={key} style={{padding:'5px 10px',fontFamily:'monospace',color:idx>=0?'#374151':'#ef4444',fontSize:10}}>{idx>=0?String(row[idx]??'').substring(0,40):'—'}</td>;})}></tr>))}{previewRows.length===0&&<tr><td colSpan={Object.keys(fields).length} style={{padding:'12px',textAlign:'center',color:'#9ca3af'}}>無資料列</td></tr>}</tbody>
+              </table>
+            </div>
+          </div>
+          <div style={{padding:14,borderTop:'1px solid #dde1e8',display:'flex',justifyContent:'flex-end',gap:10}}>
+            <button onClick={onCancel} style={{background:'#eef0f4',border:'1px solid #dde1e8',color:'#6b7280',padding:'8px 16px',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:700}}>取消</button>
+            <button onClick={()=>onConfirm(localCols)} disabled={!allMapped} style={{background:allMapped?'#16a34a':'#374151',color:'white',border:0,padding:'8px 20px',borderRadius:8,cursor:allMapped?'pointer':'not-allowed',fontSize:12,fontWeight:700}}>✓ 確認，套用此對應</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{fontFamily:"'Noto Sans TC',sans-serif",color:'#1a1d23'}}>
+      {mappingModal && <MappingModal type={mappingModal.type} cols={mappingModal.cols} rows={mappingModal.rows} onConfirm={cols=>confirmMapping(mappingModal.type,cols)} onCancel={()=>setMappingModal(null)}/>}
+
+      {/* Settings bar */}
+      <div className="card" style={{marginBottom:16,display:'flex',alignItems:'center',gap:20,flexWrap:'wrap'}}>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <label style={{fontSize:'0.65rem',color:'#6b7280',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.07em'}}>安全預留量</label>
+          <input className="distrib-input" type="number" style={{width:70,fontFamily:'JetBrains Mono,monospace'}} value={stockBuffer} onChange={e=>setStockBuffer(parseInt(e.target.value)||0)}/>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <label style={{fontSize:'0.65rem',color:'#6b7280',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.07em'}}>改版排除年段</label>
+          <div style={{display:'flex',gap:4}}>
+            {[1,2,3,4,5,6].map(g=>(
+              <button key={g} onClick={()=>setRevisionGrades(prev=>prev.includes(g)?prev.filter(v=>v!==g):[...prev,g])}
+                style={{width:24,height:24,borderRadius:6,fontSize:10,fontWeight:700,border:0,cursor:'pointer',background:revisionGrades.includes(g)?'#16a34a':'#eef0f4',color:revisionGrades.includes(g)?'#fff':'#6b7280',transition:'all 0.15s'}}>{g}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Upload cards */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:12,marginBottom:20}}>
+        <UploadCard title="1. 庫存表" hint="料號＋庫存量" onFile={f=>handleUpload('inv',f)} ok={inventoryData.length>0} count={inventoryData.length}/>
+        <UploadCard title="2. 銷量表" hint="料號＋縣市＋出貨量" onFile={f=>handleUpload('sales',f)} ok={salesData.length>0} count={salesData.length}/>
+        <UploadCard title="3. 修訂對照表" hint="支援版對版複雜格式" onFile={f=>handleUpload('rev',f)} ok={revisionData.length>0} count={revisionData.length}/>
+        <UploadCard title="4. 縣市代碼表" hint="代碼→中文名" onFile={handleCityMappingUpload} ok={cityMappingData.length>0} count={cityMappingData.length} optional/>
+      </div>
+
+      {/* Status / detected cols */}
+      {(inventoryData.length>0||salesData.length>0)&&(
+        <div style={{marginBottom:16,background:'#f4f5f7',border:'1px solid #dde1e8',color:'#6b7280',padding:12,borderRadius:10,fontSize:11,display:'flex',flexWrap:'wrap',gap:12,alignItems:'center'}}>
+          <span style={{fontSize:'0.6rem',fontWeight:900,textTransform:'uppercase',letterSpacing:'0.1em',color:'#9ca3af'}}>偵測欄位</span>
+          {detectedCols.inv.id&&<span>庫存-料號：<b style={{color:'#16a34a'}}>{detectedCols.inv.id}</b></span>}
+          {detectedCols.inv.qty&&<span>庫存-數量：<b style={{color:'#16a34a'}}>{detectedCols.inv.qty}</b></span>}
+          {detectedCols.sales.city&&<span>銷量-縣市：<b style={{color:'#7eb3ff'}}>{detectedCols.sales.city}</b></span>}
+          {detectedCols.sales.qty&&<span>銷量-數量：<b style={{color:'#7eb3ff'}}>{detectedCols.sales.qty}</b></span>}
+        </div>
+      )}
+
+      {/* Calc log */}
+      {calcLog.length>0&&(
+        <div style={{marginBottom:12,background:'#f4f5f7',border:'1px solid #dde1e8',borderRadius:8,padding:10,maxHeight:72,overflowY:'auto',fontFamily:'monospace',fontSize:10,color:'#9ca3af'}}>
+          {calcLog.map((l,i)=><div key={i}><span style={{color:'#b45309'}}>[LOG]</span> {l}</div>)}
+        </div>
+      )}
+
+      {/* Action bar */}
+      <div style={{background:'#ffffff',border:'1px solid #dde1e8',borderRadius:12,padding:14,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12,marginBottom:16,position:'sticky',top:56,zIndex:10,boxShadow:'0 1px 0 #dde1e8'}}>
+        <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+          <button className="btn btn-green" onClick={runDistribution} disabled={inventoryData.length===0||salesData.length===0||loading}>
+            {loading?'計算中...':'⚡ 執行計算'}
+          </button>
+          {processedResult.length>0&&(
+            <>
+              <button className="btn btn-teal" onClick={downloadCSV}>
+                <svg fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                匯出 CSV
+              </button>
+              <button className="btn btn-primary" onClick={()=>{ window.switchTab('sap'); setTimeout(()=>{ document.getElementById('sapTransferBanner').style.display='flex'; }, 100); }}>
+                → 轉入 SAP 工具
+              </button>
+            </>
+          )}
+        </div>
+        <div style={{textAlign:'right'}}>
+          <div style={{fontSize:'0.6rem',color:'#9ca3af',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em'}}>計算結果</div>
+          <div style={{fontSize:20,fontWeight:900,color:'#b45309'}}>{processedResult.length} <span style={{fontSize:12,fontWeight:400,color:'#6b7280'}}>筆</span></div>
+        </div>
+      </div>
+
+      {/* Result table */}
+      <div style={{background:'#ffffff',border:'1px solid #dde1e8',borderRadius:12,overflow:'hidden',position:'relative'}}>
+        {loading&&<div style={{position:'absolute',inset:0,background:'rgba(14,17,23,0.8)',backdropFilter:'blur(4px)',zIndex:50,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <div style={{textAlign:'center',color:'#d97706',fontWeight:700}}>計算中...</div>
+        </div>}
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%',textAlign:'left',fontSize:12,borderCollapse:'collapse'}}>
+            <thead>
+              <tr style={{background:'#f4f5f7'}}>
+                {['產品名稱','料號','庫存','配銷代號','出貨明細','合計','剩餘','狀態'].map((h,i)=>(
+                  <th key={i} style={{padding:'10px 14px',borderBottom:'1px solid #dde1e8',fontSize:9,fontWeight:700,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.07em',textAlign:i===0?'left':i>=2&&i<=4?'center':i>=5?'right':'center'}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {processedResult.length>0?processedResult.map((row,i)=>(
+                <tr key={i} style={{opacity:row.isExempt?0.4:1}}>
+                  <td style={{padding:'10px 14px',borderBottom:'1px solid #eef0f4',fontWeight:500,color:'#374151',maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.product}</td>
+                  <td style={{padding:'10px 14px',borderBottom:'1px solid #eef0f4',fontFamily:'monospace',color:'#6b7280',textAlign:'center',fontSize:10}}>{row.id}</td>
+                  <td style={{padding:'10px 14px',borderBottom:'1px solid #eef0f4',textAlign:'center',fontFamily:'monospace',color:'#6b7280'}}>{row.stock.toLocaleString()}</td>
+                  <td style={{padding:'10px 14px',borderBottom:'1px solid #eef0f4',textAlign:'center',fontWeight:900,color:'#b45309'}}>{row.city}</td>
+                  <td style={{padding:'10px 14px',borderBottom:'1px solid #eef0f4',textAlign:'center',fontSize:9,color:'#0d9488',fontFamily:'monospace'}}>{row.cityDetail}</td>
+                  <td style={{padding:'10px 14px',borderBottom:'1px solid #eef0f4',textAlign:'right',fontFamily:'monospace',color:'#6b7280'}}>{row.isExempt?'-':row.citySales.toLocaleString()}</td>
+                  <td style={{padding:'10px 14px',borderBottom:'1px solid #eef0f4',textAlign:'right',fontWeight:700,color:row.remaining>100?'#fbbf24':'#374151'}}>{row.isExempt?'-':row.remaining.toLocaleString()}</td>
+                  <td style={{padding:'10px 14px',borderBottom:'1px solid #eef0f4',textAlign:'center',maxWidth:180}}>
+                    {(()=>{const parts=row.checkStatus.split('｜'),status=parts[0],usage=parts.slice(1).join('｜');
+                      return(<div><span style={{display:'inline-block',padding:'2px 7px',borderRadius:4,fontSize:9,fontWeight:700,background:status.startsWith('OK')?'#f0fdf4':status.startsWith('改版排除')?'#f3f4f6':'#fffbeb',color:status.startsWith('OK')?'#16a34a':status.startsWith('改版排除')?'#6b7280':'#d97706'}}>{status}</span>{usage&&<div style={{fontSize:9,color:'#6b7280',marginTop:2,wordBreak:'break-all'}}>{usage}</div>}</div>);
+                    })()}
+                  </td>
+                </tr>
+              )):(
+                <tr><td colSpan="8" style={{padding:'80px 16px',textAlign:'center',color:'#d1d5db'}}>
+                  <div style={{fontSize:14,fontWeight:700}}>上傳檔案 → 確認欄位 → 執行計算</div>
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+ReactDOM.render(<App />, document.getElementById('distrib-root'));
+</script>
+
+<!-- ═══════════════════════════════════════════
+     參考書條碼表 JS
+═══════════════════════════════════════════ -->
+<script>
+(function(){
+const RB_GRADES = ['一年級','二年級','三年級','四年級','五年級','六年級'];
+const RB_DEF_PRICES = {'自修語數':510,'自修生社':410,'評量':210,'生活評量12':320,'麻辣':250,'測驗卷':180,'英語':210};
+
+function rbGetP(key){
+  const el=document.getElementById('rb-p-'+key);
+  return (el&&el.value.trim())?parseInt(el.value.trim()):RB_DEF_PRICES[key];
+}
+
+// ── 品項定義（列）× 科目定義（欄）──
+// 每個 ITEM_DEF 是一列（一個品項），grades12only=只有1-2年級有，grades3up=3-6年級才有
+// 每個 SUBJ_DEF 是一欄（一個科目）
+
+// 科目欄定義：{label, si, ii_map}
+// ii_map: 每個品項在此科的 item index（-1=無此欄）
+// 品項列定義: 學習自修=0, 學習評量=1, 麻辣講義=2, 麻辣教用=3, 測驗卷=4
+const RB_SUBJ_COLS = [
+  // iis: item index per rowIdx [自修,評量,麻辣,麻辣教,測驗卷], -1=無此欄
+  // gmin: minimum grade (1-based), 0=all, null=not available
+  {label:'國語',        si:0, iis:[0,1,-1,-1,4], gmin:[0,0,null,null,0], pks:['自修語數','評量',null,null,'測驗卷']},
+  {label:'數學',        si:1, iis:[0,1,2,3,4], gmin:[0,0,3,3,0], pks:['自修語數','評量','麻辣','麻辣','測驗卷']},
+  // 生活/自然：學習自修3年級起，學習評量1年級起(自修式)，無麻辣，測驗卷1年級起
+  {label:'生活/自然',   si:2, iis:[0,1,-1,-1,2], gmin:[3,0,null,null,0],  pks:['自修生社','評量',null,null,'測驗卷'], pk12s:['自修生社','生活評量12',null,null,'測驗卷']},
+  // 社會：學習自修3年級起，學習評量3年級起，無麻辣，測驗卷3年級起
+  {label:'社會',        si:3, iis:[0,1,-1,-1,2],  gmin:[3,3,null,null,3],  pks:['自修生社','評量',null,null,'測驗卷']},
+  {label:'英語(康軒WW)',si:4, iis:[-1,0,-1,-1,-1], gmin:[null,3,null,null,null], pks:[null,'英語',null,null,null]},
+  {label:'英語(翰H)',   si:4, iis:[-1,1,-1,-1,-1], gmin:[null,3,null,null,null], pks:[null,'英語',null,null,null]},
+];
+
+// 品項列定義（每個年段的列順序）
+// rowIdx 對應 SUBJ_COLS 的 iis[rowIdx]
+const RB_ITEM_ROWS = [
+  {label:'學習自修',   tax:'免稅', rowIdx:0, allGrades:true},
+  {label:'學習評量',   tax:'免稅', rowIdx:1, allGrades:true},
+  {label:'麻辣講義',   tax:'免稅', rowIdx:2, gradesFrom:3},  // 3年級起
+  {label:'麻辣講義教用',tax:'免稅', rowIdx:3, gradesFrom:3},
+  {label:'測驗卷(門市)',tax:'應稅', rowIdx:4, allGrades:true},
+];
+
+// 版次輸入格的 id: rb-v-{gradeIdx}-{rowIdx}-{colIdx}
+// 反紅 checkbox: rb-h-{gradeIdx}-{rowIdx}-{colIdx}
+// 調價輸入: rb-p-{gradeIdx}-{rowIdx}-{colIdx}
+
+const RB_REF_STRUCT = [
+  {subj:'國語', items:[
+    {name:'學習自修',match:'學習自修',pk:'自修語數',notT:false},
+    {name:'學習評量',match:'學習評量',pk:'評量',notT:false},
+    {name:'麻辣講義',match:'麻辣講義',pk:'麻辣',notT:true},
+    {name:'麻辣講義(教)',match:'麻辣講義',pk:'麻辣',notT:false,isTeacher:true},
+    {name:'測驗卷(門市)',match:'測驗卷',pk:'測驗卷',notT:false},
+  ]},
+  {subj:'數學', items:[
+    {name:'學習自修',match:'學習自修',pk:'自修語數',notT:false},
+    {name:'學習評量',match:'學習評量',pk:'評量',notT:false},
+    {name:'麻辣講義',match:'麻辣講義',pk:'麻辣',notT:true},
+    {name:'麻辣講義(教)',match:'麻辣講義',pk:'麻辣',notT:false,isTeacher:true},
+    {name:'測驗卷(門市)',match:'測驗卷',pk:'測驗卷',notT:false},
+  ]},
+  {subj:'生活‧自然', items:[
+    {name:'學習自修',match:'學習自修',pk:'自修生社',notT:false},
+    {name:'自修式/學習評量',match:'自修式',pk:'評量',notT:false,pk12:'生活評量12'},
+    {name:'測驗卷(門市)',match:'測驗卷',pk:'測驗卷',notT:false},
+  ]},
+  {subj:'社會', items:[
+    {name:'學習自修',match:'學習自修',pk:'自修生社',notT:false},
+    {name:'學習評量',match:'學習評量',pk:'評量',notT:false},
+    {name:'測驗卷(門市)',match:'測驗卷',pk:'測驗卷',notT:false},
+  ]},
+  {subj:'英語', items:[
+    {name:'Wonder World 學評',match:'Wonder',pk:'英語',notT:false},
+    {name:'翰Here 學評',match:'Here',pk:'英語',notT:false},
+  ]},
+];
+
+let rbFM={}, rbRefData=null;
+
+window.rbUpdateTitle = function(){
+  const y=(document.getElementById('rb-year').value||'115').trim();
+  const s=document.getElementById('rb-sem').value;
+  document.getElementById('rb-title-preview').textContent=y+'('+s+')';
+};
+function rbGetTitle(){
+  return (document.getElementById('rb-year').value||'115').trim()+'('+document.getElementById('rb-sem').value+')';
+}
+
+function rbHlBox(id){
+  return '<label class="bc-hl-toggle" title="勾選=反紅"><input type="checkbox" id="'+id+'" data-hl="1">反紅</label>';
+}
+function rbIsHL(id){const el=document.getElementById(id);return !!(el&&el.checked);}
+function rbBindHl(){
+  document.getElementById('panel-refbc').querySelectorAll('input[data-hl]').forEach(function(cb){
+    if(cb._b) return; cb._b=1;
+    cb.addEventListener('change',function(){ this.parentElement.classList.toggle('on',this.checked); });
+  });
+}
+
+// ── 判斷此格是否有產品 ──
+// colIdx=科目欄, rowIdx=品項列rowIdx, g=年級(0-based)
+function rbHasProduct(colIdx, rowIdx, g){
+  const col = RB_SUBJ_COLS[colIdx];
+  const ii = col.iis[rowIdx];
+  if(ii < 0) return false;            // 此科無此品項
+  const gm = col.gmin[rowIdx];
+  if(gm === null) return false;       // 明確標為不可用
+  if(gm > 0 && g < gm-1) return false; // 未達最低年級（gm是1-based，g是0-based）
+  const row = RB_ITEM_ROWS[rowIdx];
+  if(row.gradesFrom && g < row.gradesFrom-1) return false; // 麻辣等品項的年級限制
+  return true;
+}
+
+function rbGetDefaultPrc(colIdx, rowIdx, g){
+  const col = RB_SUBJ_COLS[colIdx];
+  const pk = (col.pk12s && g<2) ? col.pk12s[rowIdx] : col.pks[rowIdx];
+  if(!pk) return 0;
+  return rbGetP(pk);
+}
+
+// ── 建立設定表格（每個年段一個 section）──
+function rbBuildAllForms(){
+  // 全部集中在一個 table，行=年級×品項，欄=科目
+  // 按 1-2年級 / 3-6年級 分段，因為麻辣只有3年級起
+  
+  // 先建 1-2年級 section（無麻辣）
+  let sections = [
+    {grades:[0,1], label:'一、二年級'},
+    {grades:[2,3,4,5], label:'三～六年級（含麻辣）'},
+  ];
+  
+  const tbl = document.getElementById('rb-tbl-main');
+  if(!tbl) return; // HTML table not ready
+  
+  let h = '<thead><tr><th style="width:80px">年級</th><th style="width:90px">品項</th>'
+    + RB_SUBJ_COLS.map(c=>'<th>'+c.label+'</th>').join('') + '</tr></thead><tbody>';
+  
+  for(const g of [0,1,2,3,4,5]){
+    const gradeLabel = RB_GRADES[g];
+    let firstRowInGrade = true;
+    // 品項數（此年級有幾列）
+    const activeRows = RB_ITEM_ROWS.filter(row => !row.gradesFrom || g >= row.gradesFrom-1);
+    
+    activeRows.forEach((row, ri)=>{
+      h += '<tr>';
+      if(firstRowInGrade){
+        // 合併年級格
+        h += '<td class="cs" rowspan="'+activeRows.length+'" style="text-align:center;font-weight:700;vertical-align:middle;background:#f0f4fa">'+gradeLabel+'</td>';
+        firstRowInGrade = false;
+      }
+      // 品項名稱格（評量列在1-2年級加「自修式」提示）
+      const formItemLabel = (row.rowIdx===1 && g<2) ? row.label+'<br><span style="font-size:7.5px;color:#0d9488">（生活：自修式）</span>' : row.label;
+      h += '<td class="cs" style="font-size:10px;white-space:nowrap">'+formItemLabel+'<br><span style="font-size:8px;color:#888">('+row.tax+')</span></td>';
+      // 各科格
+      RB_SUBJ_COLS.forEach((col, ci)=>{
+        const has = rbHasProduct(ci, row.rowIdx, g);
+        if(!has){
+          h += '<td class="bc-ver-table ce"></td>';
+        } else {
+          const defPrc = rbGetDefaultPrc(ci, row.rowIdx, g);
+          const vid = 'rb-v-'+g+'-'+row.rowIdx+'-'+ci;
+          const pid = 'rb-p-'+g+'-'+row.rowIdx+'-'+ci;
+          const hid = 'rb-h-'+g+'-'+row.rowIdx+'-'+ci;
+          h += '<td><div class="bc-cell-wrap">'
+            + rbHlBox(hid)
+            + '<span class="bc-field-label">版次</span>'
+            + '<input class="ver" type="text" id="'+vid+'" maxlength="2" style="width:42px">'
+            + '<span class="bc-field-label" style="margin-top:2px">價格</span>'
+            + '<input class="prc" type="text" id="'+pid+'" placeholder="'+defPrc+'" maxlength="5" style="width:42px">'
+            + '</div></td>';
+        }
+      });
+      h += '</tr>';
+    });
+    // 年級間分隔
+    if(g===1){
+      h += '<tr><td colspan="'+(2+RB_SUBJ_COLS.length)+'" style="background:#e8f0fe;height:4px;padding:0"></td></tr>';
+    }
+  }
+  h += '</tbody>';
+  tbl.innerHTML = h;
+  rbBindHl();
+}
+
+window.rbApplyGlobal = function(){
+  const v=document.getElementById('rb-g-ver').value.trim();
+  if(!v){alert('請先填入版次！');return;}
+  document.getElementById('panel-refbc').querySelectorAll('input.ver').forEach(el=>{el.value=v;});
+};
+window.rbClearAllHl = function(){
+  document.getElementById('panel-refbc').querySelectorAll('.bc-hl-toggle input[type=checkbox]').forEach(cb=>{
+    cb.checked=false; cb.parentElement.classList.remove('on');
+  });
+};
+
+// ── 圖片 ──
+const rbDz=document.getElementById('rb-dz'), rbFi=document.getElementById('rb-fi');
+rbDz.addEventListener('dragover',e=>{e.preventDefault();rbDz.classList.add('over');});
+rbDz.addEventListener('dragleave',()=>rbDz.classList.remove('over'));
+rbDz.addEventListener('drop',e=>{e.preventDefault();rbDz.classList.remove('over');rbLoadImgs(e.dataTransfer.files);});
+rbFi.addEventListener('change',e=>rbLoadImgs(e.target.files));
+function rbLoadImgs(files){
+  rbFM={}; let n=0;
+  for(const f of files){if(/\.(jpg|jpeg)$/i.test(f.name)){rbFM[f.name.replace(/\.(jpg|jpeg)$/i,'').toLowerCase()]=URL.createObjectURL(f);n++;}}
+  const fc=document.getElementById('rb-fc');
+  fc.className = n===0 ? 'bc-fc warn' : 'bc-fc';
+  fc.textContent=n>0?'✓ 已載入 '+n+' 個條碼圖檔':'⚠️ 沒有讀到任何 .jpg 檔，請確認資料夾';
+}
+
+// ── Excel ──
+const rbDzXl=document.getElementById('rb-dz-xl'), rbFiXl=document.getElementById('rb-fi-xl');
+rbDzXl.addEventListener('dragover',e=>{e.preventDefault();rbDzXl.classList.add('over');});
+rbDzXl.addEventListener('dragleave',()=>rbDzXl.classList.remove('over'));
+rbDzXl.addEventListener('drop',e=>{e.preventDefault();rbDzXl.classList.remove('over');rbParseXl(e.dataTransfer.files[0]);});
+rbFiXl.addEventListener('change',e=>rbParseXl(e.target.files[0]));
+function rbParseXl(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+      let dataStart=-1;
+      for(let i=0;i<rows.length;i++){if(rows[i]&&String(rows[i][0]||'').trim()==='科目'){dataStart=i+1;break;}}
+      if(dataStart<0) throw new Error('找不到資料列');
+      let curSubj=''; const raw=[];
+      for(let i=dataStart;i<rows.length;i++){
+        const r=rows[i]; if(!r||r.every(v=>v===null)) continue;
+        const s0=String(r[0]||'').trim(), s1=String(r[1]||'').trim();
+        if(!s1||s1.startsWith('產品異動')) continue;
+        if(s0) curSubj=s0; if(!curSubj) continue;
+        const codes=[], vers=[];
+        for(let g=0;g<6;g++){codes.push(r[3+g*2]!=null?String(r[3+g*2]).trim():null);vers.push(r[4+g*2]!=null?String(r[4+g*2]).trim():null);}
+        raw.push({subj:curSubj,item:s1,codes,vers});
+      }
+      const matchSubj={'國語':'國語','數學':'數學','生活與自然':'生活‧自然','生活':'生活‧自然','社會':'社會','英語':'英語'};
+      rbRefData=[];
+      RB_REF_STRUCT.forEach((struct,si)=>{
+        rbRefData[si]=[];
+        struct.items.forEach((item,ii)=>{
+          const found=raw.find(r=>{
+            const sM=matchSubj[r.subj]===struct.subj||r.subj.includes(struct.subj.replace('‧自然',''));
+            const iM=r.item.includes(item.match);
+            if(item.isTeacher) return sM&&iM&&r.item.includes('教');
+            if(item.notT) return sM&&iM&&!r.item.includes('教');
+            return sM&&iM;
+          });
+          rbRefData[si][ii]=found?{codes:found.codes,vers:found.vers}:{codes:Array(6).fill(null),vers:Array(6).fill(null)};
+        });
+      });
+      rbApplyXlVers();
+      const st=document.getElementById('rb-xl-status'); st.className='bc-fc'; st.textContent='✓ 已解析 Excel，版次已帶入表格';
+    }catch(err){
+      const st=document.getElementById('rb-xl-status'); st.className='bc-fc warn'; st.textContent='❌ 解析失敗：'+err.message;
+      rbRefData=null;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function rbApplyXlVers(){
+  if(!rbRefData) return;
+  for(let g=0;g<6;g++){
+    RB_ITEM_ROWS.forEach(row=>{
+      if(row.gradesFrom && g < row.gradesFrom-1) return;
+      RB_SUBJ_COLS.forEach((col,ci)=>{
+        const ii=col.iis[row.rowIdx];
+        if(ii<0) return;
+        const d=rbRefData[col.si]&&rbRefData[col.si][ii];
+        if(!d) return;
+        const v=d.vers[g]; if(v){const el=document.getElementById('rb-v-'+g+'-'+row.rowIdx+'-'+ci); if(el) el.value=v;}
+      });
+    });
+  }
+}
+
+function rbGetV(id){const el=document.getElementById(id);return el?el.value.trim():'';}
+function rbGetPrc(id,def){const el=document.getElementById(id);return (el&&el.value.trim())?el.value.trim():String(def);}
+function rbGetCode(si,ii,g){if(!rbRefData||!rbRefData[si]||!rbRefData[si][ii]) return undefined; return rbRefData[si][ii].codes[g]||null;}
+
+let rbMissing=[];
+function rbImgCell(hasProduct,code,ver,priceText,hlId){
+  if(!hasProduct) return '<td class="bct-empty bct-h"></td>';
+  const hl=rbIsHL(hlId)?' hl':'';
+  if(code===undefined){
+    if(!ver) return '<td class="bct-h'+hl+'"><div class="bct-inner"><span style="color:#d1d5db;font-size:8px">—</span></div></td>';
+    rbMissing.push('(無料號)'+ver+'.jpg');
+    return '<td class="bct-h'+hl+'"><div class="bct-inner"><span class="bct-miss">需上傳 Excel 取得料號</span></div></td>';
+  }
+  if(code===null) return '<td class="bct-h'+hl+'"><div class="bct-inner"><span style="color:#d1d5db;font-size:8px">無料號</span></div></td>';
+  if(!ver) return '<td class="bct-h'+hl+'"><div class="bct-inner"><span class="bct-miss">未填版次</span></div></td>';
+  const fn=String(code)+String(ver);
+  const url=rbFM[fn.toLowerCase()];
+  const p=priceText?'<div class="bct-price">建議售價：'+priceText+'</div>':'';
+  if(url) return '<td class="bct-h'+hl+'"><div class="bct-inner">'+p+'<img class="bct-img" src="'+url+'"><span class="bct-fn">'+fn+'</span></div></td>';
+  rbMissing.push(fn+'.jpg');
+  return '<td class="bct-h'+hl+'"><div class="bct-inner">'+p+'<span class="bct-miss">❌ '+fn+'.jpg</span></div></td>';
+}
+
+// ── 產生條碼表（PDF格式：每個年段一頁，品項為列，科目為欄）──
+// 分頁方式：1-2年級一頁，3年級一頁，4年級一頁，5年級一頁，6年級一頁
+// （參照 PDF：一頁包含 1-2 年級，之後每年級一頁）
+window.rbGenerate = function(){
+  rbMissing=[];
+  const out=document.getElementById('rb-parea'); out.innerHTML='';
+  const T=rbGetTitle();
+  const COL_HEADS = RB_SUBJ_COLS.map(c=>c.label);
+  
+  // 頁面分組：[[0,1], [2], [3], [4], [5]]
+  const PAGE_GROUPS = [[0,1],[2],[3],[4],[5]];
+  
+  PAGE_GROUPS.forEach(gradeGroup=>{
+    const pg=document.createElement('div'); pg.className='bc-doc-page';
+    let html = '<div class="bc-doc-title">'+T+'康軒版國小參考書條碼</div>'
+      +'<table class="bct">'
+      +'<colgroup><col style="width:82px">'+COL_HEADS.map(()=>'<col>').join('')+'</colgroup>'
+      +'<thead><tr><th>年級品項</th>'+COL_HEADS.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead>'
+      +'<tbody>';
+    
+    gradeGroup.forEach(g=>{
+      RB_ITEM_ROWS.forEach(row=>{
+        // 是否此年級有此品項
+        if(row.gradesFrom && g < row.gradesFrom-1) return;
+        
+        // 行標籤（評量列在1-2年級加「自修式」提示）
+        const rowItemLabel = (row.rowIdx===1 && g<2) ? row.label+'<span style="font-size:7px;color:#0d9488;display:block">（含自修式）</span>' : row.label;
+        const rowLabel = '<td class="rl"><b>'+RB_GRADES[g]+'</b><small>'+rowItemLabel+'</small><small style="font-size:7.5px;color:#888;display:block">('+row.tax+')</small></td>';
+        html += '<tr>'+rowLabel;
+        
+        // 各科欄
+        RB_SUBJ_COLS.forEach((col,ci)=>{
+          if(!rbHasProduct(ci, row.rowIdx, g)){
+            html += '<td class="bct-empty bct-h"></td>';
+            return;
+          }
+          const ii=col.iis[row.rowIdx];
+          // 取 si (subject index) and ii (item index in that subject)
+          // For 生活/自然: si=2 has fewer items (no 麻辣), so need to map correctly
+          const code = rbGetCode(col.si, ii, g);
+          const vid = 'rb-v-'+g+'-'+row.rowIdx+'-'+ci;
+          const pid = 'rb-p-'+g+'-'+row.rowIdx+'-'+ci;
+          const hid = 'rb-h-'+g+'-'+row.rowIdx+'-'+ci;
+          const ver = rbGetV(vid);
+          const defPrc = rbGetDefaultPrc(ci, row.rowIdx, g);
+          const prc = rbGetPrc(pid, defPrc);
+          html += rbImgCell(true, code, ver, prc, hid);
+        });
+        html += '</tr>';
+      });
+    });
+    
+    html += '</tbody></table>';
+    pg.innerHTML = html;
+    out.appendChild(pg);
+  });
+  
+  const realMissing=[...new Set(rbMissing)].filter(f=>!f.startsWith('(無料號)'));
+  document.getElementById('rb-mi').innerHTML=realMissing.length
+    ?'<div class="bc-miss-box"><h3>⚠️ '+realMissing.length+' 個條碼圖檔未找到</h3><ul>'+realMissing.map(f=>'<li>'+f+'</li>').join('')+'</ul></div>'
+    :'<div class="bc-miss-box bc-ok-box"><h3>✅ 所有條碼圖片均已找到！</h3></div>';
+  document.getElementById('rb-preview-wrap').style.display='block';
+  document.getElementById('rb-preview-wrap').scrollIntoView({behavior:'smooth'});
+};
+
+rbBuildAllForms();
+window.refbcPrint = function(){
+  // 確保列印時 @page 為橫向
+  var st = document.getElementById('_rbPrintStyle');
+  if(!st){ st=document.createElement('style'); st.id='_rbPrintStyle'; document.head.appendChild(st); }
+  st.textContent = '@page { size: A4 landscape; margin: 12mm 10mm; }';
+  window.print();
+};
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════
+     版版補充教材條碼表 JS
+═══════════════════════════════════════════ -->
+<script>
+(function(){
+let VB_XS_DATA=[], VB_LX_DATA=[], VB_RV_DATA=[];
+const VB_GN=['一年級','二年級','三年級','四年級','五年級','六年級'];
+let vbFM={};
+
+function vbGetSem(){return parseInt(document.getElementById('vb-sem').value,10);}
+function vbGetNN(g){return String(g*2-1+(vbGetSem()===1?0:1)).padStart(2,'0');}
+
+function vbBuildData(){
+  const sem=vbGetSem();
+  VB_XS_DATA=[];
+  for(let g=1;g<=6;g++){
+    const NN=vbGetNN(g);
+    if(g===1&&sem===1) VB_XS_DATA.push({g:'一年級',A:'2020100002',A2:'2020101002',B:null});
+    else VB_XS_DATA.push({g:VB_GN[g-1],A:'20201'+NN+'002',A2:null,B:'20201'+NN+'003'});
+  }
+  VB_LX_DATA=[];
+  for(let g=1;g<=6;g++){
+    const NN=vbGetNN(g);
+    VB_LX_DATA.push({g:VB_GN[g-1],cols:[
+      {m:'20201'+NN+'000',t:'20201'+NN+'001'},
+      {m:'20205'+NN+'000',t:'20205'+NN+'001'},
+      g<=2?{m:'20206'+NN+'000',t:'20206'+NN+'001'}:{m:'20207'+NN+'000',t:'20207'+NN+'001'},
+      g<=2?null:{m:'20208'+NN+'000',t:'20208'+NN+'001'},
+    ]});
+  }
+  VB_RV_DATA=[];
+  for(let g=1;g<=6;g++){
+    const NN=vbGetNN(g);
+    VB_RV_DATA.push({g:VB_GN[g-1],cols:[
+      {m:'20201'+NN+'045',t:'20201'+NN+'046'},
+      {m:'20205'+NN+'045',t:'20205'+NN+'046'},
+      null,
+      g>=3?{m:'20207'+NN+'045',t:'20207'+NN+'046'}:null,
+      g>=3?{m:'20208'+NN+'045',t:'20208'+NN+'046'}:null,
+    ]});
+  }
+}
+
+function vbGetTitle(){
+  const y=(document.getElementById('vb-year').value||'115').trim();
+  const s=vbGetSem()===1?'一':'二';
+  return y+'('+s+')';
+}
+window.vbUpdateTitle=function(){document.getElementById('vb-title-preview').textContent=vbGetTitle();};
+
+function vbHlBox(id){
+  return '<label class="bc-hl-toggle"><input type="checkbox" id="'+id+'" data-hl="1">反紅</label>';
+}
+function vbBindHl(){
+  document.getElementById('panel-verbc').querySelectorAll('input[data-hl]').forEach(function(cb){
+    if(cb._b) return; cb._b=1;
+    cb.addEventListener('change',function(){ this.parentElement.classList.toggle('on',this.checked); });
+  });
+}
+function vbNoteInput(id){
+  return '<input type="text" id="'+id+'" placeholder="（選填）" maxlength="30" style="width:130px;font-size:10px;padding:2px 4px;border:1px solid #dde1e8;border-radius:2px;background:#fffef0;">';
+}
+function vbMakeCell(prefix,gi,ci,hasData,defPrc){
+  if(!hasData) return '<td class="ce">—</td>';
+  return '<td><div class="bc-cell-wrap">'+vbHlBox(prefix+'-h-'+gi+'-'+ci)
+    +'<span class="bc-field-label">版次</span>'
+    +'<input class="ver" type="text" id="'+prefix+'-v-'+gi+'-'+ci+'" maxlength="2" style="width:42px;">'
+    +'<span class="bc-field-label" style="margin-top:2px">價格</span>'
+    +'<input class="prc" type="text" id="'+prefix+'-p-'+gi+'-'+ci+'" placeholder="'+defPrc+'" maxlength="5" style="width:42px;">'
+    +'</div></td>';
+}
+
+function vbBuildXSForm(){
+  const tb=document.getElementById('vb-xs-body'); tb.innerHTML='';
+  document.getElementById('vb-xs-th-a').textContent=vbGetSem()===1?'甲本／首冊':'甲本';
+  VB_XS_DATA.forEach(({g,A,A2,B},gi)=>{
+    const tr=document.createElement('tr');
+    const aCell='<td><div class="bc-cell-wrap">'+vbHlBox('xs-h-'+gi)
+      +'<span class="bc-field-label">版次</span><input class="ver" type="text" id="xs-v-'+gi+'" maxlength="2" style="width:42px;">'
+      +'<span class="bc-field-label" style="margin-top:2px">價格</span><input class="prc" type="text" id="xs-p-'+gi+'" placeholder="45" maxlength="5" style="width:42px;">'
+      +'</div></td>';
+    const bCell=B
+      ?'<td><div class="bc-cell-wrap">'+vbHlBox('xs-hb-'+gi)
+        +'<span class="bc-field-label">版次</span><input class="ver" type="text" id="xs-vb-'+gi+'" maxlength="2" style="width:42px;">'
+        +'<span class="bc-field-label" style="margin-top:2px">價格</span><input class="prc" type="text" id="xs-pb-'+gi+'" placeholder="45" maxlength="5" style="width:42px;">'
+        +'</div></td>'
+      :'<td class="ce">—</td>';
+    tr.innerHTML='<td class="lbl" style="background:#f8f9fb;font-weight:600;text-align:left;padding-left:8px;font-size:11px"><b>'+g+'</b><small style="display:block;font-size:9px;color:#9ca3af">習寫簿</small></td>'
+      +aCell+bCell+'<td style="padding:4px;">'+vbNoteInput('xs-note-'+gi)+'</td>';
+    tb.appendChild(tr);
+  });
+}
+
+function vbBuildLXForm(){
+  const tb=document.getElementById('vb-lx-body'); tb.innerHTML='';
+  VB_LX_DATA.forEach(({g,cols},gi)=>{
+    const tr=document.createElement('tr');
+    let h='<td class="lbl" style="background:#f8f9fb;font-weight:600;text-align:left;padding-left:8px;font-size:11px"><b>'+g+'</b><small style="display:block;font-size:9px;color:#9ca3af">練習簿</small></td>';
+    cols.forEach((c,ci)=>{h+=vbMakeCell('lx',gi,ci,c!==null,65);});
+    h+='<td style="padding:4px;">'+vbNoteInput('lx-note-'+gi)+'</td>';
+    tr.innerHTML=h; tb.appendChild(tr);
+  });
+}
+
+function vbBuildRVForm(){
+  const tb=document.getElementById('vb-rv-body'); tb.innerHTML='';
+  VB_RV_DATA.forEach(({g,cols},gi)=>{
+    const tr=document.createElement('tr');
+    let h='<td class="lbl" style="background:#f8f9fb;font-weight:600;text-align:left;padding-left:8px;font-size:11px"><b>'+g+'</b><small style="display:block;font-size:9px;color:#9ca3af">重點複習</small></td>';
+    cols.forEach((c,ci)=>{h+=vbMakeCell('rv',gi,ci,c!==null,gi===4&&(ci===3||ci===4)?100:90);});
+    h+='<td style="padding:4px;">'+vbNoteInput('rv-note-'+gi)+'</td>';
+    tr.innerHTML=h; tb.appendChild(tr);
+  });
+}
+
+window.vbRebuildAll=function(){vbBuildData();vbBuildXSForm();vbBuildLXForm();vbBuildRVForm();vbUpdateTitle();setTimeout(vbBindHl,0);};
+document.getElementById('vb-year').addEventListener('input',vbUpdateTitle);
+vbRebuildAll();
+vbBindHl();
+
+window.vbApplyGlobal=function(){
+  const v=document.getElementById('vb-g-ver').value.trim();
+  if(!v){alert('請先填入版次！');return;}
+  document.getElementById('panel-verbc').querySelectorAll('input.ver').forEach(el=>{el.value=v;});
+};
+window.vbClearAllHl=function(){
+  document.getElementById('panel-verbc').querySelectorAll('.bc-hl-toggle input[type=checkbox]').forEach(cb=>{cb.checked=false;cb.parentElement.classList.remove('on');});
+};
+
+const vbDz=document.getElementById('vb-dz'), vbFi=document.getElementById('vb-fi');
+vbDz.addEventListener('dragover',e=>{e.preventDefault();vbDz.classList.add('over');});
+vbDz.addEventListener('dragleave',()=>vbDz.classList.remove('over'));
+vbDz.addEventListener('drop',e=>{e.preventDefault();vbDz.classList.remove('over');vbLoad(e.dataTransfer.files);});
+vbFi.addEventListener('change',e=>vbLoad(e.target.files));
+function vbLoad(files){
+  vbFM={}; let n=0;
+  for(const f of files){if(/\.(jpg|jpeg)$/i.test(f.name)){vbFM[f.name.replace(/\.(jpg|jpeg)$/i,'').toLowerCase()]=URL.createObjectURL(f);n++;}}
+  const fc=document.getElementById('vb-fc');
+  fc.classList.toggle('warn',n===0);
+  fc.textContent=n>0?'✓ 已載入 '+n+' 個條碼圖檔':'⚠️ 沒有讀到任何 .jpg 檔';
+}
+
+let vbMissing=[];
+function vbIsHL(id){const el=document.getElementById(id);return !!(el&&el.checked);}
+function vbHlCls(...ids){return ids.some(id=>vbIsHL(id))?' hl':'';}
+function vbGetNote(id){const el=document.getElementById(id);return el?el.value.trim():'';}
+function vbGetV(id){const el=document.getElementById(id);return el?el.value.trim():'';}
+function vbGetP(id,def){const el=document.getElementById(id);return(el&&el.value.trim())?el.value.trim():String(def);}
+
+function vbImgHTML(code,ver,price){
+  if(!code) return '';
+  if(!ver) return '<span class="bct-miss">未填版次</span>';
+  const fn=String(code)+String(ver);
+  const url=vbFM[fn.toLowerCase()];
+  const p=price?'<div class="bct-price">'+price+'</div>':'';
+  if(url) return p+'<img class="bct-img" src="'+url+'"><span class="bct-fn">'+fn+'</span>';
+  vbMissing.push(fn+'.jpg');
+  return p+'<span class="bct-miss">❌ '+fn+'.jpg</span>';
+}
+
+function vbSlashTd(rs){return '<td'+(rs?' rowspan="'+rs+'"':'')+' class="bct-slash"></td>';}
+
+window.vbGenerate=function(){
+  vbMissing=[];
+  const out=document.getElementById('vb-parea'); out.innerHTML='';
+  const TITLE=vbGetTitle(), sem=vbGetSem();
+
+  // 習寫簿（直向）
+  const p0=document.createElement('div'); p0.className='bc-doc-page portrait';
+  let rXS='';
+  VB_XS_DATA.forEach(({g,A,A2,B},gi)=>{
+    const ver=vbGetV('xs-v-'+gi),verB=vbGetV('xs-vb-'+gi);
+    const prc=vbGetP('xs-p-'+gi,45),prcB=vbGetP('xs-pb-'+gi,45);
+    const hlA=vbHlCls('xs-h-'+gi),hlB=vbHlCls('xs-hb-'+gi);
+    const note=vbGetNote('xs-note-'+gi);
+    let aCell=A2
+      ?'<td class="bct-h'+hlA+'"><div class="bct-inner"><div>'+vbImgHTML(A,ver,prc+'/本')+'</div><div>'+vbImgHTML(A2,ver,prc+'/本')+'</div></div></td>'
+      :'<td class="bct-h'+hlA+'"><div class="bct-inner">'+vbImgHTML(A,ver,prc+'/本')+'</div></td>';
+    const bCell=B?'<td class="bct-h'+hlB+'"><div class="bct-inner">'+vbImgHTML(B,verB||ver,prcB+'/本')+'</div></td>':vbSlashTd();
+    const noteCell=note?'<td class="bc-note-col">'+note+'</td>':'';
+    rXS+='<tr><td class="rl"><b>'+g+'</b><small>習寫簿</small></td>'+aCell+bCell+noteCell+'</tr>';
+  });
+  const hasNoteXS=VB_XS_DATA.some((_,gi)=>vbGetNote('xs-note-'+gi));
+  const xsHeadA=sem===1?'首冊／甲本':'甲本';
+  p0.innerHTML='<div class="bc-doc-title">'+TITLE+'康軒版國小補充教材條碼（習寫簿）</div>'
+    +'<table class="bct" style="table-layout:fixed"><colgroup><col style="width:70px"><col><col>'+(hasNoteXS?'<col style="width:110px"':'')+'></colgroup>'
+    +'<thead><tr><th>年級品項</th><th>'+xsHeadA+'</th><th>乙本</th>'+(hasNoteXS?'<th class="bc-note-col-head">備註</th>':'')+'</tr></thead>'
+    +'<tbody>'+rXS+'</tbody></table>';
+  out.appendChild(p0);
+
+  // 練習簿（橫向 1-3 / 4-6）
+  [[0,3],[3,6]].forEach(([s,e])=>{
+    const pg=document.createElement('div'); pg.className='bc-doc-page';
+    const hasNote=VB_LX_DATA.slice(s,e).some((_,ri)=>vbGetNote('lx-note-'+(s+ri)));
+    let rows='';
+    VB_LX_DATA.slice(s,e).forEach(({g,cols},ri)=>{
+      const gi=s+ri, note=vbGetNote('lx-note-'+gi);
+      rows+='<tr><td class="rl"><b>'+g+'</b><small>練習簿</small></td>';
+      cols.forEach((c,ci)=>{const ver=vbGetV('lx-v-'+gi+'-'+ci),prc=vbGetP('lx-p-'+gi+'-'+ci,65),hl=vbHlCls('lx-h-'+gi+'-'+ci);rows+=c?'<td class="bct-h'+hl+'"><div class="bct-inner">'+vbImgHTML(c.m,ver,prc)+'</div></td>':vbSlashTd();});
+      if(hasNote) rows+='<td class="bc-note-col" rowspan="2">'+note+'</td>';
+      rows+='</tr>';
+      rows+='<tr><td class="rl"><b>'+g+'</b><small>練習簿(教)</small></td>';
+      cols.forEach((c,ci)=>{const ver=vbGetV('lx-v-'+gi+'-'+ci),prc=vbGetP('lx-p-'+gi+'-'+ci,65),hl=vbHlCls('lx-h-'+gi+'-'+ci);rows+=c?'<td class="bct-h'+hl+'"><div class="bct-inner">'+vbImgHTML(c.t,ver,prc)+'</div></td>':vbSlashTd();});
+      rows+='</tr>';
+    });
+    pg.innerHTML='<div class="bc-doc-title">'+TITLE+'康軒版國小補充教材條碼（練習簿）</div>'
+      +'<table class="bct"><colgroup><col style="width:68px"><col><col><col><col>'+(hasNote?'<col style="width:110px">':'')+'</colgroup>'
+      +'<thead><tr><th>年級品項</th><th>國語</th><th>數學</th><th>生活／自然</th><th>社會</th>'+(hasNote?'<th class="bc-note-col-head">備註</th>':'')+'</tr></thead>'
+      +'<tbody>'+rows+'</tbody></table>';
+    out.appendChild(pg);
+  });
+
+  // 重點複習（橫向 1-3 / 4-6）
+  [[0,3],[3,6]].forEach(([s,e])=>{
+    const pg=document.createElement('div'); pg.className='bc-doc-page';
+    const hasNote=VB_RV_DATA.slice(s,e).some((_,ri)=>vbGetNote('rv-note-'+(s+ri)));
+    let rows='';
+    VB_RV_DATA.slice(s,e).forEach(({g,cols},ri)=>{
+      const gi=s+ri, is5=gi===4, note=vbGetNote('rv-note-'+gi);
+      rows+='<tr><td class="rl"><b>'+g+'</b><small>重點複習</small></td>';
+      cols.forEach((c,ci)=>{const ver=vbGetV('rv-v-'+gi+'-'+ci),defP=(is5&&(ci===3||ci===4))?100:90,prc=vbGetP('rv-p-'+gi+'-'+ci,defP),hl=vbHlCls('rv-h-'+gi+'-'+ci);rows+=c?'<td class="bct-h'+hl+'"><div class="bct-inner">'+vbImgHTML(c.m,ver,prc)+'</div></td>':vbSlashTd();});
+      if(hasNote) rows+='<td class="bc-note-col" rowspan="2">'+note+'</td>';
+      rows+='</tr>';
+      rows+='<tr><td class="rl"><b>'+g+'</b><small>重點複習(教)</small></td>';
+      cols.forEach((c,ci)=>{const ver=vbGetV('rv-v-'+gi+'-'+ci),defP=(is5&&(ci===3||ci===4))?100:90,prc=vbGetP('rv-p-'+gi+'-'+ci,defP),hl=vbHlCls('rv-h-'+gi+'-'+ci);rows+=c?'<td class="bct-h'+hl+'"><div class="bct-inner">'+vbImgHTML(c.t,ver,prc)+'</div></td>':vbSlashTd();});
+      rows+='</tr>';
+    });
+    pg.innerHTML='<div class="bc-doc-title">'+TITLE+'康軒版國小補充教材條碼（重點複習）</div>'
+      +'<table class="bct"><colgroup><col style="width:68px"><col><col><col><col><col>'+(hasNote?'<col style="width:110px">':'')+'</colgroup>'
+      +'<thead><tr><th>年級品項</th><th>國語</th><th>數學</th><th>生活</th><th>自然</th><th>社會</th>'+(hasNote?'<th class="bc-note-col-head">備註</th>':'')+'</tr></thead>'
+      +'<tbody>'+rows+'</tbody></table>';
+    out.appendChild(pg);
+  });
+
+  const uniq=[...new Set(vbMissing)];
+  document.getElementById('vb-mi').innerHTML=uniq.length
+    ?'<div class="bc-miss-box"><h3>⚠️ '+uniq.length+' 個檔案未找到</h3><ul>'+uniq.map(f=>'<li>'+f+'</li>').join('')+'</ul></div>'
+    :'<div class="bc-miss-box bc-ok-box"><h3>✅ 所有條碼圖片均已找到！</h3></div>';
+  document.getElementById('vb-preview-wrap').style.display='block';
+  document.getElementById('vb-preview-wrap').scrollIntoView({behavior:'smooth'});
+};
+
+window.verbcPrint=function(){
+  // 版版：習寫簿直向，其餘橫向 → 用 auto 讓各頁自己決定
+  var st = document.getElementById('_rbPrintStyle');
+  if(!st){ st=document.createElement('style'); st.id='_rbPrintStyle'; document.head.appendChild(st); }
+  st.textContent = '@page { size: A4 landscape; margin: 12mm 10mm; } @page :first { size: A4 portrait; }';
+  window.print();
+};
+})();
+</script>
+
+</body>
+</html>
