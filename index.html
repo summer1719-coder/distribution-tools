@@ -2617,7 +2617,7 @@ const ORDER_ROWS = [
       const fn=String(code)+String(ver);
       const url=rbFM[fn.toLowerCase()];
       if(url){
-        html+='<td class="bct-h'+hl+'" style="height:62px;border:1px solid #555"><div class="bct-inner"><img class="bct-img" src="'+url+'" style="max-height:52px;max-width:100%"><span class="bct-fn" style="font-size:6px">'+fn+'</span></div></td>';
+        html+='<td class="bct-h'+hl+'" style="height:62px;border:1px solid #555"><div class="bct-inner"><img class="bct-img" src="'+url+'" style="max-height:52px;max-width:100%"></div></td>';
       } else {
         rbMissing.push(fn+'.jpg');
         html+='<td class="bct-h'+hl+'" style="height:62px;border:1px solid #555"><div class="bct-inner"><span class="bct-miss" style="font-size:7px">❌'+fn+'</span></div></td>';
