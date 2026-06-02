@@ -1240,7 +1240,10 @@ td.sort-highlight { font-weight: 700; color: #4f8ef7; }
         </div>
       </div>
 
-      <button class="bc-btn-gen" onclick="rbGenerate()">▶　產生條碼表格</button>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;margin-bottom:0">
+      <button class="bc-btn-gen" onclick="rbGenerate()" id="rb-btn-std" style="flex:1;margin-top:0">▶　產生條碼表格（依年段分頁）</button>
+      <button class="bc-btn-gen" onclick="rbGenerateOrder()" id="rb-btn-ord" style="flex:1;margin-top:0;background:#0d9488">▶　產生訂單格式（全年級一頁）</button>
+    </div>
 
       <!-- 預覽區（inline，不切換頁面）-->
       <div class="bc-preview-wrap" id="rb-preview-wrap" style="display:none;margin-top:20px">
@@ -2498,6 +2501,108 @@ window.rbGenerate = function(){
   const realMissing=[...new Set(rbMissing)].filter(f=>!f.startsWith('(無料號)'));
   document.getElementById('rb-mi').innerHTML=realMissing.length
     ?'<div class="bc-miss-box"><h3>⚠️ '+realMissing.length+' 個條碼圖檔未找到</h3><ul>'+realMissing.map(f=>'<li>'+f+'</li>').join('')+'</ul></div>'
+    :'<div class="bc-miss-box bc-ok-box"><h3>✅ 所有條碼圖片均已找到！</h3></div>';
+  document.getElementById('rb-preview-wrap').style.display='block';
+  document.getElementById('rb-preview-wrap').scrollIntoView({behavior:'smooth'});
+};
+
+// ── 訂單格式：全年級一頁，行=科目×品項，欄=年級 ──
+window.rbGenerateOrder = function(){
+  rbMissing=[];
+  const out=document.getElementById('rb-parea'); out.innerHTML='';
+  const T=rbGetTitle();
+
+  // 行定義：依科目分組，每個科目下有其品項
+  // structure: [{subjLabel, rows:[{rowLabel, rowIdx, colIdx(科目欄), hasGrade:[bool×6]}]}]
+  const ROW_DEFS = [];
+
+  RB_SUBJ_COLS.forEach((col,ci)=>{
+    // 只取「主要科目」（去掉英語重複的si）
+    // 每個 ci 都建一組
+    const subjRows = [];
+    RB_ITEM_ROWS.forEach(row=>{
+      // 看這個 col×row 組合，六個年級各有沒有
+      const hasGrades = [0,1,2,3,4,5].map(g=>rbHasProduct(ci,row.rowIdx,g));
+      if(hasGrades.some(h=>h)){
+        subjRows.push({
+          rowLabel: row.label + (row.tax==='應稅'?'(應)':''),
+          rowIdx: row.rowIdx,
+          ci: ci,
+          hasGrades: hasGrades,
+        });
+      }
+    });
+    if(subjRows.length > 0){
+      ROW_DEFS.push({subjLabel: col.label, rows: subjRows});
+    }
+  });
+
+  const pg = document.createElement('div'); pg.className='bc-doc-page';
+  let html = '<div class="bc-doc-title">'+T+'康軒版國小參考書條碼表</div>'
+    +'<table class="bct" style="table-layout:fixed">'
+    +'<colgroup><col style="width:52px"><col style="width:60px">'
+    +[0,1,2,3,4,5].map(()=>'<col>').join('')
+    +'</colgroup>'
+    +'<thead><tr>'
+    +'<th>產品</th><th></th>'
+    +['一年級','二年級','三年級','四年級','五年級','六年級'].map(h=>'<th>'+h+'</th>').join('')
+    +'</tr></thead><tbody>';
+
+  ROW_DEFS.forEach(subjDef=>{
+    const totalRows = subjDef.rows.length;
+    subjDef.rows.forEach((row,ri)=>{
+      html += '<tr>';
+      // 科目格（rowspan）
+      if(ri===0){
+        html += '<td class="rl" rowspan="'+totalRows+'" style="font-size:9px;font-weight:700;writing-mode:vertical-rl;text-orientation:mixed;text-align:center;vertical-align:middle;padding:4px 2px;background:#f0f4fa;width:52px">'+subjDef.subjLabel+'</td>';
+      }
+      // 品項格
+      html += '<td class="rl" style="font-size:8px;text-align:center;white-space:nowrap;padding:2px;background:#f8f9fb">'+row.rowLabel+'</td>';
+      // 六個年級格
+      [0,1,2,3,4,5].forEach(g=>{
+        if(!row.hasGrades[g]){
+          html += '<td class="bct-empty bct-h" style="height:72px"></td>';
+          return;
+        }
+        const col = RB_SUBJ_COLS[row.ci];
+        const ii = col.iis[row.rowIdx];
+        const code = rbGetCode(col.si, ii, g);
+        const vid = 'rb-v-'+g+'-'+row.rowIdx+'-'+row.ci;
+        const hid = 'rb-h-'+g+'-'+row.rowIdx+'-'+row.ci;
+        const ver = rbGetV(vid);
+        const hl = rbIsHL(hid) ? ' hl' : '';
+        if(!ver){
+          html += '<td class="bct-h'+hl+'" style="height:72px"><div class="bct-inner"><span class="bct-miss" style="font-size:7px">未填版次</span></div></td>';
+          return;
+        }
+        if(code===undefined){
+          html += '<td class="bct-h'+hl+'" style="height:72px"><div class="bct-inner"><span style="color:#d1d5db;font-size:7px">—</span></div></td>';
+          return;
+        }
+        if(code===null){
+          html += '<td class="bct-h'+hl+'" style="height:72px"><div class="bct-inner"><span style="color:#d1d5db;font-size:7px">無料號</span></div></td>';
+          return;
+        }
+        const fn = String(code)+String(ver);
+        const url = rbFM[fn.toLowerCase()];
+        if(url){
+          html += '<td class="bct-h'+hl+'" style="height:72px"><div class="bct-inner"><img class="bct-img" src="'+url+'" style="max-height:52px"><span class="bct-fn">'+fn+'</span></div></td>';
+        } else {
+          rbMissing.push(fn+'.jpg');
+          html += '<td class="bct-h'+hl+'" style="height:72px"><div class="bct-inner"><span class="bct-miss" style="font-size:7px">❌ '+fn+'</span></div></td>';
+        }
+      });
+      html += '</tr>';
+    });
+  });
+
+  html += '</tbody></table>';
+  pg.innerHTML = html;
+  out.appendChild(pg);
+
+  const realMissing=[...new Set(rbMissing)].filter(f=>!f.startsWith('(無料號)'));
+  document.getElementById('rb-mi').innerHTML=realMissing.length
+    ?'<div class="bc-miss-box"><h3>⚠️ '+realMissing.length+' 個條碼圖檔未找到</h3><ul>'+realMissing.slice(0,20).map(f=>'<li>'+f+'</li>').join('')+(realMissing.length>20?'<li>...還有'+(realMissing.length-20)+'個</li>':'')+'</ul></div>'
     :'<div class="bc-miss-box bc-ok-box"><h3>✅ 所有條碼圖片均已找到！</h3></div>';
   document.getElementById('rb-preview-wrap').style.display='block';
   document.getElementById('rb-preview-wrap').scrollIntoView({behavior:'smooth'});
