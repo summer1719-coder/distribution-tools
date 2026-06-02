@@ -1196,10 +1196,10 @@ td.sort-highlight { font-weight: 700; color: #4f8ef7; }
         <div class="bc-dz" id="rb-dz" onclick="document.getElementById('rb-fi').click()">
           <div class="ico">📂</div>
           <p><strong>點此選擇資料夾</strong>，或直接拖曳至此</p>
-          <p>支援 .jpg / .jpeg　檔名：料號(10碼)+版次(2碼)</p>
+          <p>支援 .jpg / .jpeg / .png　檔名：料號(10碼)+版次(2碼)</p>
           <div class="bc-fc" id="rb-fc"></div>
         </div>
-        <input type="file" id="rb-fi" multiple accept=".jpg,.jpeg" webkitdirectory style="display:none">
+        <input type="file" id="rb-fi" multiple accept=".jpg,.jpeg,.png" webkitdirectory style="display:none">
       </div>
 
       <!-- 版次設定 -->
@@ -1289,10 +1289,10 @@ td.sort-highlight { font-weight: 700; color: #4f8ef7; }
         <div class="bc-dz" id="vb-dz" onclick="document.getElementById('vb-fi').click()">
           <div class="ico">📂</div>
           <p><strong>點此選擇資料夾</strong>，或直接拖曳至此</p>
-          <p>支援 .jpg / .jpeg　檔名：料號(10碼)+版次(2碼)</p>
+          <p>支援 .jpg / .jpeg / .png　檔名：料號(10碼)+版次(2碼)</p>
           <div class="bc-fc" id="vb-fc"></div>
         </div>
-        <input type="file" id="vb-fi" multiple accept=".jpg,.jpeg" webkitdirectory style="display:none">
+        <input type="file" id="vb-fi" multiple accept=".jpg,.jpeg,.png" webkitdirectory style="display:none">
       </div>
 
       <!-- 版次設定 -->
@@ -2341,10 +2341,10 @@ rbDz.addEventListener('drop',e=>{e.preventDefault();rbDz.classList.remove('over'
 rbFi.addEventListener('change',e=>rbLoadImgs(e.target.files));
 function rbLoadImgs(files){
   rbFM={}; let n=0;
-  for(const f of files){if(/\.(jpg|jpeg)$/i.test(f.name)){rbFM[f.name.replace(/\.(jpg|jpeg)$/i,'').toLowerCase()]=URL.createObjectURL(f);n++;}}
+  for(const f of files){if(/\.(jpg|jpeg|png)$/i.test(f.name)){rbFM[f.name.replace(/\.(jpg|jpeg|png)$/i,'').toLowerCase()]=URL.createObjectURL(f);n++;}}
   const fc=document.getElementById('rb-fc');
   fc.className = n===0 ? 'bc-fc warn' : 'bc-fc';
-  fc.textContent=n>0?'✓ 已載入 '+n+' 個條碼圖檔':'⚠️ 沒有讀到任何 .jpg 檔，請確認資料夾';
+  fc.textContent=n>0?'✓ 已載入 '+n+' 個條碼圖檔':'⚠️ 沒有讀到任何 .jpg / .png 檔，請確認資料夾';
 }
 
 // ── Excel ──
@@ -2650,10 +2650,10 @@ vbDz.addEventListener('drop',e=>{e.preventDefault();vbDz.classList.remove('over'
 vbFi.addEventListener('change',e=>vbLoad(e.target.files));
 function vbLoad(files){
   vbFM={}; let n=0;
-  for(const f of files){if(/\.(jpg|jpeg)$/i.test(f.name)){vbFM[f.name.replace(/\.(jpg|jpeg)$/i,'').toLowerCase()]=URL.createObjectURL(f);n++;}}
+  for(const f of files){if(/\.(jpg|jpeg|png)$/i.test(f.name)){vbFM[f.name.replace(/\.(jpg|jpeg|png)$/i,'').toLowerCase()]=URL.createObjectURL(f);n++;}}
   const fc=document.getElementById('vb-fc');
   fc.classList.toggle('warn',n===0);
-  fc.textContent=n>0?'✓ 已載入 '+n+' 個條碼圖檔':'⚠️ 沒有讀到任何 .jpg 檔';
+  fc.textContent=n>0?'✓ 已載入 '+n+' 個條碼圖檔':'⚠️ 沒有讀到任何 .jpg / .png 檔';
 }
 
 let vbMissing=[];
