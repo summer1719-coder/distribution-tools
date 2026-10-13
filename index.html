@@ -1865,6 +1865,42 @@ const App = () => {
   const [calcLog, setCalcLog] = useState([]);
   const [revisionGrades, setRevisionGrades] = useState([1,3,5]);
   const [stockBuffer, setStockBuffer] = useState(50);
+  const [versionOrder, setVersionOrder] = useState('old'); // 同料號多版次：old=舊版先分、new=新版先分
+
+  // ── 銷量表料號轉換（上學期 → 下學期）──
+  const CONV_KEY='salesConvOverrides_v1';
+  const [convEnabled, setConvEnabled] = useState(()=>/-2\s*$/.test((document.getElementById('globalPeriod')||{}).value||''));
+  const [convOverrides, setConvOverrides] = useState(()=>{ try{ return JSON.parse(localStorage.getItem(CONV_KEY)||'{}')||{}; }catch(e){ return {}; } });
+  const [convOnlyIssues, setConvOnlyIssues] = useState(false);
+  const [convOpen, setConvOpen] = useState(true);
+  const saveOverride=(from,to)=>{ setConvOverrides(prev=>{ const n={...prev}; const v=String(to||'').trim(); if(v&&v!==ruleConvert(from).to) n[from]=v; else delete n[from]; try{ localStorage.setItem(CONV_KEY,JSON.stringify(n)); }catch(e){} return n; }); };
+  // 規則：料號第 6–7 碼為年級學期碼，01/03/05/07/09/11 = 上學期，下學期 = +1（料號 +1000）
+  // 固定對照：首冊、1上 習寫簿 對到 1下 甲／乙本
+  const SPECIAL_CONV={'2020100002':{to:'2020102002',label:'固定對照：首冊 → 1下甲本'},'2020101002':{to:'2020102003',label:'固定對照：1上 → 1下乙本'}};
+  const ruleConvert=(id)=>{ if(SPECIAL_CONV[id]) return {to:SPECIAL_CONV[id].to,rule:true,label:SPECIAL_CONV[id].label}; const c=parseInt(String(id).slice(5,7),10); if(String(id).length===10&&c>=1&&c<=11&&c%2===1) return {to:String(Number(id)+1000),rule:true}; return {to:String(id),rule:false}; };
+  const invById=React.useMemo(()=>{ const m={}; inventoryData.forEach(i=>{ m[i.id]=i; }); return m; },[inventoryData]);
+  const convRows=React.useMemo(()=>{
+    const g={};
+    salesData.forEach(r=>{ if(!g[r.id]) g[r.id]={from:r.id,name:r.name||'',qty:0,cities:new Set()}; g[r.id].qty+=r.qty; if(r.qty>0) g[r.id].cities.add(r.city); if(!g[r.id].name&&r.name) g[r.id].name=r.name; });
+    const hasInv=inventoryData.length>0;
+    return Object.values(g).map(x=>{
+      const rc=ruleConvert(x.from); let to=rc.to, status, level;
+      if(convOverrides[x.from]){ to=convOverrides[x.from]; status='手動指定'; level='manual'; }
+      else if(!rc.rule){ status='非上學期料號，維持原料號'; level='keep'; }
+      else if(hasInv&&!invById[rc.to]&&invById[x.from]){ to=x.from; status='上下學期共用料號，維持原料號'; level='keep'; }
+      else status=rc.label||'依規則轉換', level='ok';
+      if(hasInv&&!invById[to]){ status=status+'｜⚠ 下學期庫存表無此料號'; level='warn'; }
+      return {...x,cityCount:x.cities.size,to,toName:invById[to]?.name||'',status,level};
+    }).sort((a,b)=>a.from.localeCompare(b.from));
+  },[salesData,inventoryData,convOverrides,invById]);
+  const convMap=React.useMemo(()=>{ const m={}; convRows.forEach(r=>{ m[r.from]=r.to; }); return m; },[convRows]);
+  const effectiveSales=React.useMemo(()=>convEnabled?salesData.map(r=>({...r,origId:r.id,id:convMap[r.id]||r.id})):salesData,[convEnabled,salesData,convMap]);
+  const downloadConv=()=>{
+    const data=convRows.map(r=>({'上學期料號':r.from,'上學期品名(銷量表)':r.name,'下學期料號':r.to,'下學期品名(庫存表)':r.toName,'出貨量合計':r.qty,'出貨縣市數':r.cityCount,'狀態':r.status}));
+    const ws=XLSX.utils.json_to_sheet(data); ws['!cols']=[{wch:13},{wch:28},{wch:13},{wch:28},{wch:10},{wch:10},{wch:34}];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'料號轉換對照');
+    XLSX.writeFile(wb,`銷量表料號轉換_上轉下_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
 
   const processFile = (file, callback) => {
     const reader = new FileReader();
@@ -1894,6 +1930,8 @@ const App = () => {
     let idCol=-1;
     for(let i=0;i<Math.min(rows.length,10);i++){const r=rows[i];if(!r)continue;for(let j=0;j<r.length;j++){if(String(r[j]||'').trim().includes('料號')){idCol=j;break;}}if(idCol>=0)break;}
     if(idCol<0) return null;
+    let stockNoteCol=-1;
+    for(let i=0;i<Math.min(rows.length,10);i++){const r=rows[i];if(!r)continue;for(let j=0;j<r.length;j++){const v=String(r[j]||'').replace(/\s/g,'');if(j!==idCol&&v.includes('庫存')&&/(說明|處理|備註|處置)/.test(v)){stockNoteCol=j;break;}}if(stockNoteCol>=0)break;}
     let noteCol=-1;
     for(let i=0;i<Math.min(rows.length,10);i++){const r=rows[i];if(!r)continue;for(let j=0;j<r.length;j++){const v=String(r[j]||'').trim();if(v.includes('修訂重點')||v.includes('修訂說明')||v.includes('補充說明')){noteCol=j;break;}}if(noteCol>=0)break;}
     let versionLabels={};
@@ -1913,18 +1951,20 @@ const App = () => {
         else if(hasLimit) recommendations.push(label+'限區');
         else if(hasScrap) recommendations.push(label+'報廢');
       });
-      const noteText=noteCol>=0&&r[noteCol]?String(r[noteCol]).replace(/[\r\n]+/g,' ').trim():'';
+      const baseNote=noteCol>=0&&r[noteCol]?String(r[noteCol]).replace(/[\r\n]+/g,' ').trim():'';
+      const stockNote=stockNoteCol>=0&&stockNoteCol!==noteCol&&r[stockNoteCol]?String(r[stockNoteCol]).replace(/[\r\n]+/g,' ').trim():'';
+      const noteText=[baseNote,stockNote?'【庫存說明】'+stockNote:''].filter(Boolean).join('　');
       const usageNote=recommendations.length>0?recommendations.join('、'):'混用';
-      data.push({id,note:noteText||'',usage:usageNote});
+      data.push({id,note:noteText||'',usage:usageNote,stockNote});
     }
-    return data.length>0?{data}:null;
+    return data.length>0?{data,stockNoteCol}:null;
   };
 
   const handleUpload = (type, file) => {
     if (!file) return;
     processFile(file, rows => {
       setRawRows(prev=>({...prev,[type]:rows}));
-      if(type==='rev'){const parsed=tryParseComplexRevision(rows);if(parsed){setRevisionData(parsed.data);setDetectedCols(prev=>({...prev,rev:{id:'料號(自動)',note:`修訂重點+建議(${parsed.data.length}筆)`}}));setCalcLog(prev=>[...prev,`修訂對照表：偵測到複雜版對版格式，已解析 ${parsed.data.length} 筆`]);return;}}
+      if(type==='rev'){const parsed=tryParseComplexRevision(rows);if(parsed){setRevisionData(parsed.data);setDetectedCols(prev=>({...prev,rev:{id:'料號(自動)',note:`修訂重點+建議(${parsed.data.length}筆)`}}));setCalcLog(prev=>[...prev,`修訂對照表：偵測到複雜版對版格式，已解析 ${parsed.data.length} 筆`,parsed.stockNoteCol>=0?`修訂對照表：已讀取「庫存說明」欄（${parsed.data.filter(d=>d.stockNote).length} 筆有內容），會併入說明`:'修訂對照表：未找到「庫存說明」欄']);return;}}
       let cols={};
       if(type==='inv') cols={id:smartFindColumn(rows,'inv_id'),name:smartFindColumn(rows,'inv_name'),ver:smartFindColumn(rows,'inv_ver'),qty:smartFindColumn(rows,'inv_qty')};
       else if(type==='sales') cols={id:smartFindColumn(rows,'sales_id'),city:smartFindColumn(rows,'sales_city'),qty:smartFindColumn(rows,'sales_qty')};
@@ -1936,26 +1976,61 @@ const App = () => {
   const confirmMapping = (type, cols) => {
     const rows=rawRows[type];
     if(type==='inv'){setDetectedCols(prev=>({...prev,inv:{id:cols.id.label||`欄${cols.id.index}`,qty:cols.qty.label||`欄${cols.qty.index}`}}));setInventoryData(rows.filter(r=>r[cols.id.index]&&String(r[cols.id.index]).match(/^2020/)).map(r=>({id:String(r[cols.id.index]).trim().split('.')[0],name:String(r[cols.name.index]||'').trim(),version:String(r[cols.ver.index]||'').trim().split('.')[0],qty:parseFloat(r[cols.qty.index])||0})));}
-    else if(type==='sales'){setDetectedCols(prev=>({...prev,sales:{id:cols.id.label,city:cols.city.label||`欄${cols.city.index}`,qty:cols.qty.label||`欄${cols.qty.index}`}}));setSalesData(rows.filter(r=>r[cols.id.index]&&String(r[cols.id.index]).match(/^2020/)).map(r=>({id:String(r[cols.id.index]).trim().split('.')[0],city:String(r[cols.city.index]||'').trim(),qty:parseFloat(r[cols.qty.index])||0})));}
-    else{setDetectedCols(prev=>({...prev,rev:{id:cols.id.label,note:cols.note.label}}));setRevisionData(rows.filter(r=>r[cols.id.index]&&String(r[cols.id.index]).match(/^2020/)).map(r=>({id:String(r[cols.id.index]).trim().split('.')[0],note:String(r[cols.note.index]||"混用").replace(/[\r\n]+/g,' ').trim()})));}
+    else if(type==='sales'){const nameCol=smartFindColumn(rows,'inv_name').index;setDetectedCols(prev=>({...prev,sales:{id:cols.id.label,city:cols.city.label||`欄${cols.city.index}`,qty:cols.qty.label||`欄${cols.qty.index}`}}));setSalesData(rows.filter(r=>r[cols.id.index]&&String(r[cols.id.index]).match(/^2020/)).map(r=>({id:String(r[cols.id.index]).trim().split('.')[0],name:nameCol>=0&&nameCol!==cols.id.index?String(r[nameCol]||'').trim():'',city:String(r[cols.city.index]||'').trim(),qty:parseFloat(r[cols.qty.index])||0})));}
+    else{let sc=-1;for(let i=0;i<Math.min(rows.length,10)&&sc<0;i++){const r=rows[i]||[];for(let j=0;j<r.length;j++){const v=String(r[j]||'').replace(/\s/g,'');if(j!==cols.id.index&&j!==cols.note.index&&v.includes('庫存')&&/(說明|處理|備註|處置)/.test(v)){sc=j;break;}}}
+      setDetectedCols(prev=>({...prev,rev:{id:cols.id.label,note:cols.note.label}}));setRevisionData(rows.filter(r=>r[cols.id.index]&&String(r[cols.id.index]).match(/^2020/)).map(r=>{const stockNote=sc>=0&&r[sc]?String(r[sc]).replace(/[\r\n]+/g,' ').trim():'';return{id:String(r[cols.id.index]).trim().split('.')[0],note:[String(r[cols.note.index]||"混用").replace(/[\r\n]+/g,' ').trim(),stockNote?'【庫存說明】'+stockNote:''].filter(Boolean).join('　'),stockNote};}));}
     setMappingModal(null);
+  };
+
+  // 解析修訂對照表「使用庫存處理方式」：哪些版次當樣書／不配區、哪些區不配
+  const parseStockNote=(txt)=>{
+    const res={skipAll:false,skipVers:new Set(),noRegions:[]};
+    if(!txt) return res;
+    String(txt).split(/[;；。\n]/).forEach(seg=>{
+      seg=seg.trim(); if(!seg) return;
+      const vers=[...seg.matchAll(/(\d{2})\s*版/g)].map(m=>String(parseInt(m[1])));
+      if(/當樣書|不配區/.test(seg)){ if(vers.length) vers.forEach(v=>res.skipVers.add(v)); else res.skipAll=true; }
+      const rm=[...seg.matchAll(/不配([^\s，,、;；。]+?區)/g)].map(m=>m[1]);
+      rm.forEach(r=>{ if(vers.length) res.noRegions.push({region:r,vers}); else res.noRegions.push({region:r,vers:null}); });
+    });
+    return res;
   };
 
   const runDistribution = () => {
     setLoading(true); setCalcLog(["系統啟動...","正在建立銷量索引..."]);
     setTimeout(() => {
       const salesMap={};
-      salesData.forEach(item=>{if(!salesMap[item.id])salesMap[item.id]=[];salesMap[item.id].push({city:item.city,qty:item.qty});});
-      const results=inventoryData.map(inv=>{
+      effectiveSales.forEach(item=>{if(!salesMap[item.id])salesMap[item.id]=[];salesMap[item.id].push({city:item.city,qty:item.qty});});
+      if(convEnabled) setCalcLog(prev=>[...prev,`銷量表已套用上→下學期料號轉換（${convRows.filter(r=>r.from!==r.to).length} 個料號）`]);
+      // 同一料號的不同版次不可分到同一縣市：依料號→版次(舊→新)順序分配，已分出的縣市不再分給同料號其他版次
+      const usedCities={}, alloc={};
+      inventoryData.map((inv,idx)=>({inv,idx})).sort((a,b)=>a.inv.id===b.inv.id?((parseInt(a.inv.version)||0)-(parseInt(b.inv.version)||0))*(versionOrder==='new'?-1:1):0).forEach(({inv,idx})=>{
         const gm=inv.name.match(/[123456１２３４５６]/);
         const grade=gm?(parseInt(gm[0])||{'１':1,'２':2,'３':3,'４':4,'５':5,'６':6}[gm[0]]):null;
         const isRev=grade&&revisionGrades.includes(grade);
-        let ac=[],tas=0,cs=isRev?"改版排除":"";
-        if(!isRev){const cands=(salesMap[inv.id]||[]).filter(s=>s.qty>0).sort((a,b)=>b.qty-a.qty);for(const c of cands){if(tas+c.qty+stockBuffer<=inv.qty){ac.push(c);tas+=c.qty;}}cs=ac.length>1?`多區組合(${ac.length})`:ac.length===1?"OK":"庫存不足";}
+        const used=usedCities[inv.id]||(usedCities[inv.id]=new Set());
+        let ac=[],tas=0,skipped=0;
+        const riU=revisionData.find(r=>r.id===inv.id);
+        const verNum=String(parseInt(inv.version)||inv.version);
+        const scrapped=!!(riU&&riU.usage&&riU.usage.split('、').some(u=>{const m=u.match(/^(\d+)版報廢$/);return m&&String(parseInt(m[1]))===verNum;}));
+        const sn=parseStockNote(riU&&riU.stockNote);
+        const sample=sn.skipAll||sn.skipVers.has(verNum);
+        const noRegs=sn.noRegions.filter(x=>!x.vers||x.vers.includes(verNum)).map(x=>x.region);
+        const cityName=code=>cityMappingData.find(m=>m.code===code)?.name||'';
+        const regionHit=c=>noRegs.some(r=>{const k=r.replace(/區$/,'');return String(c.city).includes(k)||cityName(c.city).includes(k);});
+        let regionSkipped=0;
+        if(!isRev&&!scrapped&&!sample&&inv.qty>0){const cands=(salesMap[inv.id]||[]).filter(s=>s.qty>0).sort((a,b)=>b.qty-a.qty);for(const c of cands){if(used.has(c.city)){skipped++;continue;}if(regionHit(c)){regionSkipped++;continue;}if(tas+c.qty+stockBuffer<=inv.qty){ac.push(c);tas+=c.qty;}}ac.forEach(c=>used.add(c.city));}
+        alloc[idx]={grade,isRev,ac,tas,skipped,scrapped,sample,noRegs,regionSkipped};
+      });
+      const results=inventoryData.map((inv,idx)=>{
+        const {isRev,ac,tas,skipped,scrapped,sample,noRegs,regionSkipped}=alloc[idx];
+        let cs=isRev?"改版排除":scrapped?"報廢版次不配銷":sample?"當樣書／不配區（依庫存說明）":(ac.length>1?`多區組合(${ac.length})`:ac.length===1?"OK":(skipped>0?"縣市已分給其他版次":"庫存不足"));
         const ri=revisionData.find(r=>r.id===inv.id);
         const gcn=code=>cityMappingData.find(m=>m.code===code)?.name||"";
         const editNote=ri?ri.note:'', usageNote=ri?(ri.usage||''):'混用';
-        const fullCheck=cs+(usageNote?'｜'+usageNote:'');
+        const stockWarn=(ri&&ri.stockNote&&/報廢/.test(ri.stockNote)&&/混用/.test(usageNote)?'｜⚠ 勾混用但庫存說明含報廢':'')
+          +(noRegs&&noRegs.length?`｜不配${noRegs.join('、')}${regionSkipped?`(已排除${regionSkipped}區)`:'(⚠ 銷量表找不到此區，請人工確認)'}`:'');
+        const fullCheck=cs+(usageNote?'｜'+usageNote:'')+stockWarn;
         return{product:inv.name,id:inv.id,version:inv.version,stock:inv.qty,city:isRev?"改版排除":(ac.length>0?ac.map(c=>c.city).join(','):"無合適區"),cityDetail:isRev?"-":ac.map(c=>{const n=gcn(c.city);return n?`${n}(${c.city}):${c.qty}`:`${c.city}:${c.qty}`;}).join(', '),citySales:tas,remaining:isRev?0:(inv.qty-tas),checkStatus:fullCheck,note:editNote,isExempt:isRev,cityCount:ac.length};
       }).filter(item=>item.stock>0);
       const sorted=results.sort((a,b)=>a.isExempt===b.isExempt?0:a.isExempt?1:-1);
@@ -2064,6 +2139,14 @@ const App = () => {
           <input className="distrib-input" type="number" style={{width:70,fontFamily:'JetBrains Mono,monospace'}} value={stockBuffer} onChange={e=>setStockBuffer(parseInt(e.target.value)||0)}/>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <label style={{fontSize:'0.65rem',color:'#6b7280',fontWeight:700,letterSpacing:'0.07em'}}>同料號多版次</label>
+          <select className="distrib-input" value={versionOrder} onChange={e=>setVersionOrder(e.target.value)} style={{fontSize:12}}>
+            <option value="old">舊版次先分配</option>
+            <option value="new">新版次先分配</option>
+          </select>
+          <span style={{fontSize:10,color:'#9ca3af'}}>一個縣市只會分到其中一個版次</span>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
           <label style={{fontSize:'0.65rem',color:'#6b7280',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.07em'}}>改版排除年段</label>
           <div style={{display:'flex',gap:4}}>
             {[1,2,3,4,5,6].map(g=>(
@@ -2086,6 +2169,57 @@ const App = () => {
         <UploadCard noteKey="distrib_rev" title="3. 修訂對照表" hint="支援版對版複雜格式" onFile={f=>handleUpload('rev',f)} ok={revisionData.length>0} count={revisionData.length}/>
         <UploadCard noteKey="distrib_city" title="4. 縣市代碼表" hint="代碼→中文名" onFile={handleCityMappingUpload} ok={cityMappingData.length>0} count={cityMappingData.length} optional/>
       </div>
+
+      {/* 銷量表料號轉換 */}
+      {salesData.length>0&&(
+        <div style={{marginBottom:16,background:'#ffffff',border:convEnabled?'2px solid #7eb3ff':'1px solid #dde1e8',borderRadius:12,padding:14}}>
+          <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+            <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontWeight:700,fontSize:13,color:'#1a1d23'}}>
+              <input type="checkbox" checked={convEnabled} onChange={e=>setConvEnabled(e.target.checked)} style={{width:16,height:16}}/>
+              🔁 銷量表料號轉換：上學期 → 下學期
+            </label>
+            <span style={{fontSize:11,color:'#6b7280'}}>規則：料號第 6–7 碼 01/03/05/07/09/11（上）→ +1 變 02/04/…/12（下），例 2020103002 → 2020104002；固定對照：首冊 2020100002 → 1下甲 2020102002、1上 2020101002 → 1下乙 2020102003</span>
+            <button type="button" className="unote-btn" style={{marginLeft:'auto'}} onClick={()=>setConvOpen(o=>!o)}>{convOpen?'收合對照表 ▲':'展開對照表 ▼'}</button>
+          </div>
+          {(()=>{ const changed=convRows.filter(r=>r.from!==r.to).length, warn=convRows.filter(r=>r.level==='warn').length, keep=convRows.filter(r=>r.level==='keep').length, manual=convRows.filter(r=>r.level==='manual').length;
+            return <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:10,fontSize:11}}>
+              <span style={{background:'#eff6ff',color:'#1d4ed8',padding:'3px 10px',borderRadius:999}}>銷量表料號 {convRows.length} 個</span>
+              <span style={{background:'#f0fdf4',color:'#16a34a',padding:'3px 10px',borderRadius:999}}>轉換 {changed} 個</span>
+              {keep>0&&<span style={{background:'#f4f5f7',color:'#4b5563',padding:'3px 10px',borderRadius:999}}>維持原料號 {keep} 個</span>}
+              {manual>0&&<span style={{background:'#f5f3ff',color:'#6d28d9',padding:'3px 10px',borderRadius:999}}>手動指定 {manual} 個</span>}
+              {inventoryData.length>0?(warn>0?<span style={{background:'#fef2f2',color:'#b91c1c',padding:'3px 10px',borderRadius:999,fontWeight:700}}>⚠ 下學期庫存找不到 {warn} 個</span>:<span style={{background:'#f0fdf4',color:'#16a34a',padding:'3px 10px',borderRadius:999,fontWeight:700}}>✔ 全部對得到下學期庫存</span>)
+                :<span style={{background:'#fffbeb',color:'#92400e',padding:'3px 10px',borderRadius:999}}>上傳 1. 庫存表後會自動核對</span>}
+              {!convEnabled&&<span style={{color:'#b45309'}}>（目前未啟用，計算時使用原料號）</span>}
+            </div>; })()}
+          {convOpen&&(<>
+            <div style={{display:'flex',alignItems:'center',gap:10,margin:'10px 0 6px',fontSize:11,color:'#6b7280',flexWrap:'wrap'}}>
+              <label style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer'}}><input type="checkbox" checked={convOnlyIssues} onChange={e=>setConvOnlyIssues(e.target.checked)}/> 只看需要確認的</label>
+              <span>「下學期料號」可直接修改，修改後會記住（下次上傳同料號自動套用）</span>
+              <button type="button" className="unote-btn" style={{marginLeft:'auto'}} onClick={downloadConv}>⬇ 下載對照表 Excel</button>
+            </div>
+            <div style={{maxHeight:360,overflow:'auto',border:'1px solid #eef0f4',borderRadius:8}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+                <thead><tr style={{position:'sticky',top:0,background:'#f4f5f7',zIndex:1}}>
+                  {['上學期料號','品名（銷量表）','','下學期料號','品名（下學期庫存）','出貨量合計','縣市數','狀態'].map((h,i)=><th key={i} style={{textAlign:i>=5&&i<=6?'right':'left',padding:'6px 8px',fontSize:11,color:'#6b7280',fontWeight:700,whiteSpace:'nowrap'}}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {convRows.filter(r=>!convOnlyIssues||r.level==='warn'||r.level==='manual'||r.level==='keep').map(r=>(
+                    <tr key={r.from} style={{borderTop:'1px solid #eef0f4',background:r.level==='warn'?'#fef2f2':r.level==='manual'?'#f5f3ff':'transparent'}}>
+                      <td style={{padding:'5px 8px',fontFamily:'monospace'}}>{r.from}</td>
+                      <td style={{padding:'5px 8px',color:'#4b5563'}}>{r.name||<span style={{color:'#c0c4cc'}}>—</span>}</td>
+                      <td style={{padding:'5px 2px',color:'#9ca3af'}}>→</td>
+                      <td style={{padding:'3px 8px'}}><input key={r.from+'|'+r.to} defaultValue={r.to} maxLength={10} onBlur={e=>{ if(e.target.value.trim()!==r.to) saveOverride(r.from,e.target.value); }} onKeyDown={e=>{ if(e.key==='Enter') e.target.blur(); }} style={{width:104,fontFamily:'monospace',fontSize:12,padding:'3px 6px',border:'1px solid '+(r.level==='warn'?'#fca5a5':'#dde1e8'),borderRadius:5,background:'#fff',color:r.from!==r.to?'#1d4ed8':'#1a1d23',fontWeight:r.from!==r.to?700:400}}/>{r.level==='manual'&&<button type="button" title="還原為規則轉換" onClick={()=>saveOverride(r.from,'')} style={{marginLeft:4,border:'none',background:'none',cursor:'pointer',color:'#6d28d9',fontSize:12}}>↺</button>}</td>
+                      <td style={{padding:'5px 8px',color:r.toName?'#1a1d23':'#c0c4cc'}}>{r.toName||'—'}</td>
+                      <td style={{padding:'5px 8px',textAlign:'right',fontWeight:700}}>{r.qty.toLocaleString()}</td>
+                      <td style={{padding:'5px 8px',textAlign:'right'}}>{r.cityCount}</td>
+                      <td style={{padding:'5px 8px',fontSize:11,color:r.level==='warn'?'#b91c1c':r.level==='manual'?'#6d28d9':r.level==='keep'?'#6b7280':'#16a34a',whiteSpace:'nowrap'}}>{r.status}</td>
+                    </tr>))}
+                </tbody>
+              </table>
+            </div>
+          </>)}
+        </div>
+      )}
 
       {/* Status / detected cols */}
       {(inventoryData.length>0||salesData.length>0)&&(
@@ -2994,6 +3128,7 @@ window.verbcPrint=function(){
     var out={app:'distribution-tools',type:'uploadNotes',version:1,exportedAt:new Date().toISOString(),notes:{}};
     document.querySelectorAll('.unote').forEach(function(el){ var t=el.dataset.tool; out.notes[t]={title:el.dataset.title}; SEMS.forEach(function(s){ out.notes[t][s]=cell(t,s); }); });
     Object.keys(data.notes).forEach(function(t){ if(!out.notes[t]) out.notes[t]=data.notes[t]; });
+    try{ var ov=JSON.parse(localStorage.getItem('salesConvOverrides_v1')||'{}'); if(ov&&Object.keys(ov).length) out.salesConvOverrides=ov; }catch(e){}
     var blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
     var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
     a.download='上傳注意事項_'+new Date().toISOString().slice(0,10)+'.json'; document.body.appendChild(a); a.click(); a.remove();
@@ -3011,6 +3146,7 @@ window.verbcPrint=function(){
         if(!n){ alert('檔案裡沒有任何注意事項'); return; }
         if(!confirm('將匯入 '+n+' 筆注意事項'+(conflict?('，其中 '+conflict+' 筆會覆蓋目前已填寫的內容'):'')+'。確定匯入？')) return;
         Object.keys(d.notes).forEach(function(t){ SEMS.forEach(function(s){ var v=d.notes[t]&&d.notes[t][s]; if(v&&typeof v.text==='string'){ var c=cell(t,s); c.text=v.text; c.updatedAt=v.updatedAt||new Date().toISOString(); } }); });
+        if(d.salesConvOverrides&&typeof d.salesConvOverrides==='object'){ try{ var cur=JSON.parse(localStorage.getItem('salesConvOverrides_v1')||'{}'); localStorage.setItem('salesConvOverrides_v1',JSON.stringify(Object.assign(cur,d.salesConvOverrides))); }catch(e){} }
         save(data); document.querySelectorAll('.unote').forEach(function(el){ el._unoteRender&&el._unoteRender(); }); alert('匯入完成');
       };
       r.readAsText(f,'utf-8');
