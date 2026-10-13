@@ -370,6 +370,7 @@ td.sort-highlight { font-weight: 700; color: #4f8ef7; }
 }
 .tag-old { background: #eef0f4; color: #6b7280; }
 .tag-new { background: #f0fdf4; color: #4ade80; }
+.tag-auto { background: #eff6ff; color: #2563eb; }
 .more-row td {
   text-align: center; color: #9ca3af; font-family: 'Noto Sans TC', sans-serif;
   font-style: italic; font-size: 0.75rem; background: #f4f5f7; padding: 12px;
@@ -1041,10 +1042,15 @@ td.sort-highlight { font-weight: 700; color: #4f8ef7; }
             <input type="text" id="sapPeriodCode" value="115-1">
           </div>
           <div>
-            <label>本期最新版次（自動補備援順位 2）</label>
+            <label>本期最新版次（排在最後一個順位）</label>
             <input type="number" id="sapLatestVersion" value="41" min="1">
           </div>
         </div>
+        <label style="display:flex;align-items:flex-start;gap:8px;margin-top:12px;cursor:pointer;font-size:13px;color:#1a1d23">
+          <input type="checkbox" id="sapAutoBackup" checked style="margin-top:3px;width:15px;height:15px">
+          <span><b>自動補入同料號其他有庫存的版次</b>（排在配銷分到的版次之後、最新版次之前，例：41 → 51 → 61）<br>
+          <span id="sapAutoBackupHint" style="font-size:11px;color:#6b7280">只補「有庫存、修訂對照表為混用或未列」的版次；報廢、限區、當樣書／不配區的版次不補。需先在配銷建議系統執行計算才有庫存資料。</span></span>
+        </label>
       </div>
 
       <!-- Upload -->
@@ -1488,8 +1494,29 @@ function syncPeriod(val) {
     }));
   }
 
+  let lastSapInput = null;
+  function rerunSap(){ if(lastSapInput){ warnings = []; processSapData(lastSapInput); } }
+  $('sapAutoBackup').onchange = rerunSap;
+  $('sapLatestVersion').addEventListener('change', rerunSap);
+
+  // 從配銷計算結果取得：某料號可當中間備援的版次
+  function backupVersionsFor(material, area, exclude, latest){
+    const res = window.distribResult || [];
+    return res.filter(r => r.id === material && r.stock > 0 && !r.blocked && r.usageVer !== '限區' && r.usageVer !== '報廢')
+      .map(r => ({ v: parseInt(r.version), stock: r.stock, noRegs: r.noRegs || [] }))
+      .filter(x => x.v > 0 && !exclude.includes(x.v) && x.v !== latest)
+      .filter(x => !x.noRegs.some(rg => String(area).includes(rg.replace(/區$/,''))))
+      .sort((a,b) => a.v - b.v)
+      .filter((x,i,arr) => arr.findIndex(y => y.v === x.v) === i);
+  }
+
   function processSapData(data) {
     if (!data || data.length === 0) { showStatus('無法從檔案中抓取有效資料，請檢查欄位名稱。','err'); return; }
+    lastSapInput = data;
+    const autoBackup = $('sapAutoBackup').checked;
+    const hasStock = !!(window.distribResult && window.distribResult.length);
+    if (autoBackup && !hasStock) warnings.push('⚠ 自動補入版次已勾選，但配銷建議系統尚未執行計算，沒有庫存資料可補。');
+    let autoCount = 0;
     const userLatestVer = parseInt($('sapLatestVersion').value) || 41;
     const itemMap = new Map();
     let skippedRows = 0;
@@ -1512,12 +1539,17 @@ function syncPeriod(val) {
     if (itemMap.size === 0) { showStatus('無法抓取有效的配發資訊，請檢查「配銷縣市(代號)」欄位。','err'); return; }
     let finalOutput = []; let newVerCount=0, oldVerCount=0;
     itemMap.forEach(info => {
-      let sorted = Array.from(info.versions).sort((a,b)=>a-b);
-      if (!sorted.includes(userLatestVer)) sorted.push(userLatestVer);
-      sorted.forEach((v, index) => {
-        const isNew = v === userLatestVer;
-        if (isNew) newVerCount++; else oldVerCount++;
-        finalOutput.push({ '銷售地區':info.area,'物料號碼':info.material,'版次':v,'版次排序':index+1,'啟動不跳版':'','有限期限日期':'','_type':isNew?'備援新版':'建議舊版' });
+      const assigned = Array.from(info.versions).filter(v => v !== userLatestVer).sort((a,b)=>a-b);
+      const extras = (autoBackup && hasStock) ? backupVersionsFor(info.material, info.area, assigned, userLatestVer) : [];
+      extras.forEach(x => { autoCount++; warnings.push(`自動補入：${info.area}｜${info.material} 補 ${x.v} 版（庫存 ${x.stock}）`); });
+      const seq = [
+        ...assigned.map(v => ({v, type:'建議舊版'})),
+        ...extras.map(x => ({v:x.v, type:'自動補入'})),
+        {v:userLatestVer, type:'備援新版'}
+      ];
+      seq.forEach((o, index) => {
+        if (o.type === '備援新版') newVerCount++; else oldVerCount++;
+        finalOutput.push({ '銷售地區':info.area,'物料號碼':info.material,'版次':o.v,'版次排序':index+1,'啟動不跳版':'','有限期限日期':'','_type':o.type });
       });
     });
     finalOutput.sort((a,b) => a['銷售地區'].localeCompare(b['銷售地區']) || a['物料號碼'].localeCompare(b['物料號碼']) || a['版次排序']-b['版次排序']);
@@ -1530,7 +1562,7 @@ function syncPeriod(val) {
     ].map(s=>`<div class="stat-box"><div class="val">${s.val}</div><div class="lbl">${s.lbl}</div></div>`).join('');
     renderSapPreview(finalOutput);
     if (!document.getElementById('sapStatusArea').textContent.includes('載入')) {
-      showStatus(`解析成功！${itemMap.size} 組配發 → ${finalOutput.length} 筆匯入資料（舊版 ${oldVerCount} + 備援新版 ${newVerCount}）${skippedRows?'，略過 '+skippedRows+' 筆空白列':''}`, 'ok');
+      showStatus(`解析成功！${itemMap.size} 組配發 → ${finalOutput.length} 筆匯入資料（舊版 ${oldVerCount}${autoCount?`（含自動補入 ${autoCount}）`:''} + 備援新版 ${newVerCount}）${skippedRows?'，略過 '+skippedRows+' 筆空白列':''}`, 'ok');
     }
     if (warnings.length > 0) {
       $('sapWarnArea').innerHTML = `<details><summary>⚠ ${warnings.length} 項處理備註（點擊展開）</summary><ul>${warnings.map(w=>'<li>'+w+'</li>').join('')}</ul></details>`;
@@ -1548,7 +1580,7 @@ function syncPeriod(val) {
         <td class="center">${row['版次']}</td>
         <td class="center ${row['版次排序']>1?'sort-highlight':''}">${row['版次排序']}</td>
         <td class="center">${row['啟動不跳版']}</td><td>${row['有限期限日期']}</td>
-        <td><span class="tag ${row['_type']==='備援新版'?'tag-new':'tag-old'}">${row['_type']}</span></td>
+        <td><span class="tag ${row['_type']==='備援新版'?'tag-new':row['_type']==='自動補入'?'tag-auto':'tag-old'}">${row['_type']}</span></td>
       </tr>
     `).join('') + (data.length>limit?`<tr class="more-row"><td colspan="7">僅顯示前 ${limit} 筆，共 ${data.length} 筆</td></tr>`:'');
   }
@@ -2031,7 +2063,8 @@ const App = () => {
         const stockWarn=(ri&&ri.stockNote&&/報廢/.test(ri.stockNote)&&/混用/.test(usageNote)?'｜⚠ 勾混用但庫存說明含報廢':'')
           +(noRegs&&noRegs.length?`｜不配${noRegs.join('、')}${regionSkipped?`(已排除${regionSkipped}區)`:'(⚠ 銷量表找不到此區，請人工確認)'}`:'');
         const fullCheck=cs+(usageNote?'｜'+usageNote:'')+stockWarn;
-        return{product:inv.name,id:inv.id,version:inv.version,stock:inv.qty,city:isRev?"改版排除":(ac.length>0?ac.map(c=>c.city).join(','):"無合適區"),cityDetail:isRev?"-":ac.map(c=>{const n=gcn(c.city);return n?`${n}(${c.city}):${c.qty}`:`${c.city}:${c.qty}`;}).join(', '),citySales:tas,remaining:isRev?0:(inv.qty-tas),checkStatus:fullCheck,note:editNote,isExempt:isRev,cityCount:ac.length};
+        const usageVer=(()=>{const vn=String(parseInt(inv.version)||inv.version);const hit=(usageNote||'').split('、').map(u=>u.match(/^(\d+)版(混用|限區|報廢)$/)).find(m=>m&&String(parseInt(m[1]))===vn);return hit?hit[2]:'';})();
+        return{blocked:!!(scrapped||sample),usageVer,noRegs:noRegs||[],product:inv.name,id:inv.id,version:inv.version,stock:inv.qty,city:isRev?"改版排除":(ac.length>0?ac.map(c=>c.city).join(','):"無合適區"),cityDetail:isRev?"-":ac.map(c=>{const n=gcn(c.city);return n?`${n}(${c.city}):${c.qty}`:`${c.city}:${c.qty}`;}).join(', '),citySales:tas,remaining:isRev?0:(inv.qty-tas),checkStatus:fullCheck,note:editNote,isExempt:isRev,cityCount:ac.length};
       }).filter(item=>item.stock>0);
       const sorted=results.sort((a,b)=>a.isExempt===b.isExempt?0:a.isExempt?1:-1);
       setProcessedResult(sorted);
