@@ -791,6 +791,29 @@ td.sort-highlight { font-weight: 700; color: #4f8ef7; }
   .bct-slash  { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .bc-note-col{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ── 上傳注意事項備註欄 ── */
+.unote{margin-top:14px;border:1px solid #f3d27a;background:#fffbeb;border-radius:10px;padding:12px 14px;color:#5b3a00;font-size:13px}
+.unote-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.unote-title{font-weight:700;font-size:13px}
+.unote-tabs{display:flex;gap:4px}
+.unote-tab{border:1px solid #e6c463;background:#fff;color:#7a5200;border-radius:999px;padding:3px 12px;font-size:12px;cursor:pointer}
+.unote-tab.on{background:#f59e0b;border-color:#f59e0b;color:#fff;font-weight:700}
+.unote-tab .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#16a34a;margin-left:5px;vertical-align:middle}
+.unote textarea{width:100%;min-height:96px;box-sizing:border-box;border:1px solid #ecd28c;border-radius:8px;padding:8px 10px;font-size:13px;line-height:1.6;font-family:inherit;background:#fff;color:#1f2937;resize:vertical}
+.unote textarea:focus{outline:2px solid #f59e0b;outline-offset:0}
+.unote-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px}
+.unote-status{font-size:11px;color:#8a6a1f}
+.unote-btns{display:flex;gap:6px;flex-wrap:wrap}
+.unote-btn{border:1px solid #e6c463;background:#fff;color:#7a5200;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer}
+.unote-btn:hover{background:#fef3c7}
+.unote-compact{margin-top:10px;padding:8px 9px;font-size:12px}
+.unote-compact .unote-head{margin-bottom:6px}
+.unote-compact .unote-title{font-size:11px}
+.unote-compact .unote-tab{padding:1px 8px;font-size:11px}
+.unote-compact textarea{min-height:64px;font-size:12px;padding:6px 8px}
+.unote-compact .unote-foot{margin-top:4px}
+.unote-btn.pri{background:#f59e0b;border-color:#f59e0b;color:#fff}
 </style>
 </head>
 <body>
@@ -971,7 +994,7 @@ td.sort-highlight { font-weight: 700; color: #4f8ef7; }
         </div>
       </div>
       <div class="divider"></div>
-      <div id="distrib-root"></div>
+            <div id="distrib-root"></div>
     </div>
 
     <!-- ══ SAP ══ -->
@@ -1035,6 +1058,7 @@ td.sort-highlight { font-weight: 700; color: #4f8ef7; }
         </div>
         <div id="sapStatusArea" class="status"></div>
         <div id="sapWarnArea" class="warn-list hidden"></div>
+        <div class="unote" data-tool="sap" data-title="SAP 匯入格式轉換"></div>
       </div>
 
       <!-- Result -->
@@ -1117,6 +1141,7 @@ td.sort-highlight { font-weight: 700; color: #4f8ef7; }
             <tr><td>5</td><td>2020105002</td><td>國小國語3上習寫甲</td><td>01,91</td><td>A</td></tr></table>
           </div>
         </details>
+        <div class="unote" data-tool="box" data-title="併箱組合"></div>
       </div>
 
       <div class="box-section" id="boxEditSection" style="display:none">
@@ -1200,6 +1225,7 @@ td.sort-highlight { font-weight: 700; color: #4f8ef7; }
           <div class="bc-fc" id="rb-fc"></div>
         </div>
         <input type="file" id="rb-fi" multiple accept=".jpg,.jpeg,.png" webkitdirectory style="display:none">
+        <div class="unote" data-tool="refbc" data-title="參考書條碼"></div>
       </div>
 
       <!-- 版次設定 -->
@@ -1296,6 +1322,7 @@ td.sort-highlight { font-weight: 700; color: #4f8ef7; }
           <div class="bc-fc" id="vb-fc"></div>
         </div>
         <input type="file" id="vb-fi" multiple accept=".jpg,.jpeg,.png" webkitdirectory style="display:none">
+        <div class="unote" data-tool="verbc" data-title="版次條碼"></div>
       </div>
 
       <!-- 版次設定 -->
@@ -1960,8 +1987,10 @@ const App = () => {
     });
   };
 
-  const UploadCard = ({title,hint,onFile,ok,count,optional})=>{
+  const UploadCard = ({title,hint,onFile,ok,count,optional,noteKey})=>{
     const ref=useRef();
+    const noteRef=useRef();
+    React.useEffect(()=>{ let t; const go=()=>{ if(window.UploadNotes&&noteRef.current) window.UploadNotes.mount(noteRef.current); else t=setTimeout(go,100); }; go(); return ()=>clearTimeout(t); },[]);
     return(<div onClick={()=>!ok&&ref.current?.click()} style={{padding:16,borderRadius:12,border:ok?'2px solid #86efac':optional?'2px dashed #dde1e8':'2px solid #dde1e8',background:ok?'#f0fdf4':'#ffffff',cursor:'pointer',position:'relative',overflow:'hidden',transition:'all 0.2s'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6}}>
         <div><div style={{fontWeight:700,color:ok?'#16a34a':'#1a1d23',fontSize:13}}>{title}{optional&&<span style={{fontSize:9,background:'#eef0f4',color:'#6b7280',padding:'1px 6px',borderRadius:4,marginLeft:6}}>可選</span>}</div><div style={{color:'#6b7280',fontSize:10}}>{hint}</div></div>
@@ -1971,6 +2000,7 @@ const App = () => {
       </div>
       <input ref={ref} type="file" accept=".xls,.xlsx,.csv" onChange={e=>{if(e.target.files[0])onFile(e.target.files[0]);}} style={{display:'none'}}/>
       {ok&&<div style={{marginTop:10,display:'inline-flex',alignItems:'center',gap:6,background:'#f0fdf4',padding:'3px 10px',borderRadius:9999,fontSize:10,color:'#16a34a',fontWeight:700,border:'1px solid #86efac'}}><div style={{width:5,height:5,borderRadius:'50%',background:'#16a34a'}}/> 已讀取 {count} 筆</div>}
+      {noteKey&&<div ref={noteRef} className="unote unote-compact" data-tool={noteKey} data-title={title} onClick={e=>e.stopPropagation()} style={{cursor:'auto'}}/>}
     </div>);
   };
 
@@ -2045,11 +2075,16 @@ const App = () => {
       </div>
 
       {/* Upload cards */}
+      <div style={{display:'flex',justifyContent:'flex-end',gap:6,marginBottom:8,flexWrap:'wrap',alignItems:'center'}}>
+        <span style={{fontSize:11,color:'#8a6a1f',marginRight:'auto'}}>📝 每張表下方可填上／下學期注意事項，自動儲存</span>
+        <button type="button" className="unote-btn" onClick={()=>window.UploadNotes&&window.UploadNotes.exportJSON()}>⬇ 下載注意事項 JSON（交接用）</button>
+        <button type="button" className="unote-btn" onClick={()=>window.UploadNotes&&window.UploadNotes.importJSON()}>⬆ 匯入 JSON</button>
+      </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:12,marginBottom:20}}>
-        <UploadCard title="1. 庫存表" hint="料號＋庫存量" onFile={f=>handleUpload('inv',f)} ok={inventoryData.length>0} count={inventoryData.length}/>
-        <UploadCard title="2. 銷量表" hint="料號＋縣市＋出貨量" onFile={f=>handleUpload('sales',f)} ok={salesData.length>0} count={salesData.length}/>
-        <UploadCard title="3. 修訂對照表" hint="支援版對版複雜格式" onFile={f=>handleUpload('rev',f)} ok={revisionData.length>0} count={revisionData.length}/>
-        <UploadCard title="4. 縣市代碼表" hint="代碼→中文名" onFile={handleCityMappingUpload} ok={cityMappingData.length>0} count={cityMappingData.length} optional/>
+        <UploadCard noteKey="distrib_inv" title="1. 庫存表" hint="料號＋庫存量" onFile={f=>handleUpload('inv',f)} ok={inventoryData.length>0} count={inventoryData.length}/>
+        <UploadCard noteKey="distrib_sales" title="2. 銷量表" hint="料號＋縣市＋出貨量" onFile={f=>handleUpload('sales',f)} ok={salesData.length>0} count={salesData.length}/>
+        <UploadCard noteKey="distrib_rev" title="3. 修訂對照表" hint="支援版對版複雜格式" onFile={f=>handleUpload('rev',f)} ok={revisionData.length>0} count={revisionData.length}/>
+        <UploadCard noteKey="distrib_city" title="4. 縣市代碼表" hint="代碼→中文名" onFile={handleCityMappingUpload} ok={cityMappingData.length>0} count={cityMappingData.length} optional/>
       </div>
 
       {/* Status / detected cols */}
@@ -2904,5 +2939,87 @@ window.verbcPrint=function(){
 })();
 </script>
 
+
+<!-- ═══════════════════════════════════════════
+     上傳注意事項備註欄（上/下學期，存瀏覽器，可匯出/匯入 JSON 交接）
+═══════════════════════════════════════════ -->
+<script>
+(function(){
+  var KEY='uploadNotes_v1', SEMS=['上學期','下學期'];
+  function load(){ try{ var d=JSON.parse(localStorage.getItem(KEY)||'null'); if(d&&d.notes) return d; }catch(e){} return {app:'distribution-tools',version:1,notes:{}}; }
+  function save(d){ d.updatedAt=new Date().toISOString(); try{ localStorage.setItem(KEY,JSON.stringify(d)); return true; }catch(e){ return false; } }
+  var data=load();
+  function cell(tool,sem){ data.notes[tool]=data.notes[tool]||{}; data.notes[tool][sem]=data.notes[tool][sem]||{text:'',updatedAt:null}; return data.notes[tool][sem]; }
+  function defaultSem(){ var p=(document.getElementById('globalPeriod')||{}).value||''; return /-2\s*$/.test(p)?'下學期':'上學期'; }
+  function fmt(iso){ if(!iso) return ''; var t=new Date(iso); return t.toLocaleDateString()+' '+t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  function build(el){
+    var tool=el.dataset.tool, title=el.dataset.title, sem=defaultSem(), compact=el.classList.contains('unote-compact');
+    el.innerHTML='<div class="unote-head"><div class="unote-title">📝 '+(compact?'注意事項':'上傳注意事項　<span style="font-weight:400;color:#8a6a1f">'+esc(title)+'</span>')+'</div>'+
+      '<div class="unote-tabs">'+SEMS.map(function(s){return '<button type="button" class="unote-tab" data-sem="'+s+'">'+s+'</button>';}).join('')+'</div></div>'+
+      '<textarea placeholder="記錄這學期上傳表格的細節，例如：欄位名稱變動、哪幾欄要先刪、特殊料號、版次備援規則…"></textarea>'+
+      '<div class="unote-foot"><span class="unote-status"></span><div class="unote-btns"'+(compact?' style="display:none"':'')+'>'+
+      '<button type="button" class="unote-btn pri" data-act="save">💾 儲存</button>'+
+      '<button type="button" class="unote-btn" data-act="export">⬇ 下載 JSON（交接用）</button>'+
+      '<button type="button" class="unote-btn" data-act="import">⬆ 匯入 JSON</button></div></div>';
+    var ta=el.querySelector('textarea'), st=el.querySelector('.unote-status'), timer=null;
+    function render(){
+      el.querySelectorAll('.unote-tab').forEach(function(b){
+        var c=cell(tool,b.dataset.sem); b.classList.toggle('on',b.dataset.sem===sem);
+        b.innerHTML=b.dataset.sem+(c.text.trim()?'<span class="dot" title="已有內容"></span>':'');
+      });
+      var c=cell(tool,sem); ta.value=c.text;
+      st.textContent=c.updatedAt?('最後儲存：'+fmt(c.updatedAt)):'尚未填寫';
+    }
+    var dirty=false;
+    function sync(){ var c=cell(tool,sem); if(c.text!==ta.value){ c.text=ta.value; c.updatedAt=new Date().toISOString(); dirty=true; } }
+    function commit(){ sync(); if(!dirty) return; dirty=false; var c=cell(tool,sem);
+      st.textContent=save(data)?('已自動儲存：'+fmt(c.updatedAt)):'⚠️ 儲存失敗（瀏覽器限制）'; renderTabsOnly(); }
+    function renderTabsOnly(){ el.querySelectorAll('.unote-tab').forEach(function(b){ var c=cell(tool,b.dataset.sem); b.innerHTML=b.dataset.sem+(c.text.trim()?'<span class="dot" title="已有內容"></span>':''); }); }
+    ta.addEventListener('input',function(){ sync(); clearTimeout(timer); st.textContent='編輯中…'; timer=setTimeout(commit,600); });
+    if(compact) ta.placeholder='例：這學期庫存表第一列是標題要先刪…';
+    ta.addEventListener('blur',function(){ clearTimeout(timer); commit(); });
+    el.querySelector('.unote-tabs').addEventListener('click',function(e){ var b=e.target.closest('.unote-tab'); if(!b) return; clearTimeout(timer); commit(); sem=b.dataset.sem; render(); });
+    el.querySelector('.unote-btns').addEventListener('click',function(e){
+      var b=e.target.closest('[data-act]'); if(!b) return; clearTimeout(timer); commit();
+      if(b.dataset.act==='save'){ var c=cell(tool,sem); c.updatedAt=c.updatedAt||new Date().toISOString(); st.textContent=save(data)?('已儲存：'+fmt(new Date().toISOString())):'⚠️ 儲存失敗'; }
+      if(b.dataset.act==='export') exportJSON();
+      if(b.dataset.act==='import') importJSON();
+    });
+    el._unoteRender=render; render();
+  }
+
+  function exportJSON(){
+    var out={app:'distribution-tools',type:'uploadNotes',version:1,exportedAt:new Date().toISOString(),notes:{}};
+    document.querySelectorAll('.unote').forEach(function(el){ var t=el.dataset.tool; out.notes[t]={title:el.dataset.title}; SEMS.forEach(function(s){ out.notes[t][s]=cell(t,s); }); });
+    Object.keys(data.notes).forEach(function(t){ if(!out.notes[t]) out.notes[t]=data.notes[t]; });
+    var blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download='上傳注意事項_'+new Date().toISOString().slice(0,10)+'.json'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },1000);
+  }
+  function importJSON(){
+    var inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json';
+    inp.onchange=function(){
+      var f=inp.files[0]; if(!f) return; var r=new FileReader();
+      r.onload=function(){
+        var d; try{ d=JSON.parse(r.result); }catch(e){ alert('這不是有效的 JSON 檔'); return; }
+        if(!d||typeof d.notes!=='object'){ alert('找不到注意事項資料（缺少 notes 欄位）'); return; }
+        var n=0, conflict=0;
+        Object.keys(d.notes).forEach(function(t){ SEMS.forEach(function(s){ var v=d.notes[t]&&d.notes[t][s]; if(v&&typeof v.text==='string'){ n++; if(cell(t,s).text.trim()&&cell(t,s).text!==v.text) conflict++; } }); });
+        if(!n){ alert('檔案裡沒有任何注意事項'); return; }
+        if(!confirm('將匯入 '+n+' 筆注意事項'+(conflict?('，其中 '+conflict+' 筆會覆蓋目前已填寫的內容'):'')+'。確定匯入？')) return;
+        Object.keys(d.notes).forEach(function(t){ SEMS.forEach(function(s){ var v=d.notes[t]&&d.notes[t][s]; if(v&&typeof v.text==='string'){ var c=cell(t,s); c.text=v.text; c.updatedAt=v.updatedAt||new Date().toISOString(); } }); });
+        save(data); document.querySelectorAll('.unote').forEach(function(el){ el._unoteRender&&el._unoteRender(); }); alert('匯入完成');
+      };
+      r.readAsText(f,'utf-8');
+    };
+    inp.click();
+  }
+  window.UploadNotes={mount:function(el){ if(el&&!el._unoteRender) build(el); },exportJSON:exportJSON,importJSON:importJSON};
+  document.querySelectorAll('.unote').forEach(function(el){ window.UploadNotes.mount(el); });
+})();
+</script>
 </body>
 </html>
